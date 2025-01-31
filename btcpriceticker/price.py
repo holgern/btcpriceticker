@@ -61,7 +61,9 @@ class Price:
         self.price["sat_fiat"] = 1e8 / self.price["fiat"]
         self.ohlc = {}
         if self.enable_timeseries:
-            self.timeseries_stack = self.coinpaprika.get_history_price(self.fiat)
+            self.timeseries_stack = self.coinpaprika.get_history_price(
+                self.fiat.upper()
+            )
         else:
             self.timeseries_stack = [self.price["fiat"]]
 
@@ -72,7 +74,7 @@ class Price:
         self.price["fiat"] = self.mempool.get_current_price(self.fiat.upper())
         self.price["sat_fiat"] = 1e8 / self.price["fiat"]
         if self.enable_timeseries:
-            self.timeseries_stack = self.mempool.get_history_price(self.fiat)
+            self.timeseries_stack = self.mempool.get_history_price(self.fiat.upper())
         else:
             self.timeseries_stack = [self.price["fiat"]]
         self.ohlc = {}
