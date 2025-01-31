@@ -1,0 +1,6 @@
+urllib3
+requests
+pycoingecko
+coinpaprika-sdk
+pymempool
+pandas
