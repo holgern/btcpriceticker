@@ -27,7 +27,7 @@ class TestPrice(unittest.TestCase):
         }
         mock_get_history_price.return_value = [40000, 50000]
 
-        price_instance = Price(fiat="eur", days_ago=1)
+        price_instance = Price(fiat="eur", days_ago=1, service="coingecko")
         self.assertTrue(price_instance.refresh())
 
         self.assertEqual(price_instance.price["usd"], 50000)
@@ -44,7 +44,9 @@ class TestPrice(unittest.TestCase):
             "EUR": 42000,
         }[currency]
 
-        price_instance = Price(fiat="eur", days_ago=1, service="coinpaprika")
+        price_instance = Price(
+            fiat="eur", days_ago=1, service="coinpaprika", enable_timeseries=False
+        )
 
         self.assertTrue(price_instance.refresh())
 
@@ -62,7 +64,9 @@ class TestPrice(unittest.TestCase):
             "EUR": 42000,
         }[currency]
 
-        price_instance = Price(fiat="eur", days_ago=1, service="mempool")
+        price_instance = Price(
+            fiat="eur", days_ago=1, service="mempool", enable_timeseries=False
+        )
 
         self.assertTrue(price_instance.refresh())
 
@@ -75,7 +79,7 @@ class TestPrice(unittest.TestCase):
     @patch.object(CoinGecko, "get_history_price")
     def test_get_price_now(self, mock_get_history_price):
         mock_get_history_price.return_value = [40000, 50000]
-        price_instance = Price(fiat="eur", days_ago=1)
+        price_instance = Price(fiat="eur", days_ago=1, service="coingecko")
         price_instance.refresh()
 
         self.assertEqual(price_instance.get_price_now(), "50,000")

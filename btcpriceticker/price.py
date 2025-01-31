@@ -13,13 +13,16 @@ class Price:
         self,
         fiat="eur",
         days_ago=1,
-        service="coingecko",
-        enable_ohlc=True,
+        interval="1h",
+        service="mempool",
+        enable_ohlc=False,
         enable_timeseries=True,
     ):
         self.coingecko = CoinGecko(whichcoin="bitcoin", days_ago=days_ago)
         self.coinpaprika = CoinPaprika(whichcoin="btc-bitcoin")
-        self.mempool = Mempool()
+        self.mempool = Mempool(interval=interval, days_ago=days_ago)
+        if enable_ohlc:
+            service = "coingecko"
         self.service = service
         self.min_refresh_time = 120  # seconds
         self.fiat = fiat
@@ -56,8 +59,11 @@ class Price:
         self.price["sat_usd"] = 1e8 / self.price["usd"]
         self.price["fiat"] = self.coinpaprika.get_current_price(self.fiat.upper())
         self.price["sat_fiat"] = 1e8 / self.price["fiat"]
-        self.timeseries_stack = [self.price["fiat"]]
         self.ohlc = {}
+        if self.enable_timeseries:
+            self.timeseries_stack = self.coinpaprika.get_history_price(self.fiat)
+        else:
+            self.timeseries_stack = [self.price["fiat"]]
 
     def _fetch_prices_from_mempool(self):
         """Fetch prices from Mempool."""
@@ -65,7 +71,10 @@ class Price:
         self.price["sat_usd"] = 1e8 / self.price["usd"]
         self.price["fiat"] = self.mempool.get_current_price(self.fiat.upper())
         self.price["sat_fiat"] = 1e8 / self.price["fiat"]
-        self.timeseries_stack = [self.price["fiat"]]
+        if self.enable_timeseries:
+            self.timeseries_stack = self.mempool.get_history_price(self.fiat)
+        else:
+            self.timeseries_stack = [self.price["fiat"]]
         self.ohlc = {}
 
     def refresh(self, service=None):
@@ -102,7 +111,7 @@ class Price:
                 self.price["timestamp"] = current_time
                 return True
             except Exception as e:
-                logger.warning(f"Failed to fetch from CoinPaprika: {str(e)}")
+                logger.warning(f"Failed to fetch from mempool: {str(e)}")
         return False
 
     def set_days_ago(self, days_ago):

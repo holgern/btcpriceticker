@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +13,10 @@ except ImportError:
 
 
 class CoinPaprika:
-    def __init__(self, whichcoin="btc-bitcoin", hours_ago=2):
+    def __init__(self, whichcoin="btc-bitcoin", interval="1h"):
         self.api_client = Coinpaprika.Client() if COINPAPRIKA_MODULE else None
         self.whichcoin = whichcoin
-        self.hours_ago = hours_ago
+        self.interval = "1h"
         self.coins = None
 
     def get_coin(self, name=None, symbol=None):
@@ -53,3 +54,30 @@ class CoinPaprika:
         except Exception as e:
             logger.exception(f"Failed to fetch exchange USD price: {e}")
             return None
+
+    def calculate_start_date(self, interval: str) -> str:
+        now = datetime.utcnow()
+
+        if interval in {"24h", "1d", "7d", "14d", "30d", "90d", "365d"}:
+            start_date = now - timedelta(days=365) + timedelta(seconds=60)
+        elif interval in {"1h", "2h", "3h", "6h", "12h"}:
+            start_date = now - timedelta(days=1) + timedelta(seconds=60)
+        else:
+            raise ValueError("Invalid interval format")
+
+        return start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def get_history_price(self, currency):
+        """Fetch historical prices from CoinPaprika."""
+        logger.info(f"Getting historical data for a {self.interval} interval")
+        start_date = self.calculate_start_date(self.interval)
+        print(start_date)
+        timeseries = self.api_client.historical(
+            self.whichcoin,
+            quotes=currency,
+            interval=self.interval,
+            start=start_date,
+        )
+        timeseries_stack = [float(price["price"]) for price in timeseries]
+        timeseries_stack.append(self.get_current_price(currency))
+        return timeseries_stack
