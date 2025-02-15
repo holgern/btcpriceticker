@@ -1,6 +1,10 @@
 import logging
 from datetime import datetime, timedelta
 
+import pandas as pd
+
+from .price_timeseries import PriceTimeSeries
+
 logger = logging.getLogger(__name__)
 
 COINPAPRIKA_MODULE = None
@@ -13,10 +17,11 @@ except ImportError:
 
 
 class CoinPaprika:
-    def __init__(self, whichcoin="btc-bitcoin", interval="1h"):
+    def __init__(self, whichcoin="btc-bitcoin", days_ago=1, interval="1h"):
         self.api_client = Coinpaprika.Client() if COINPAPRIKA_MODULE else None
         self.whichcoin = whichcoin
         self.interval = "1h"
+        self.days_ago = days_ago
         self.coins = None
 
     def get_coin(self, name=None, symbol=None):
@@ -28,6 +33,19 @@ class CoinPaprika:
             if symbol and coin["symbol"] == symbol:
                 return coin
         return False
+
+    def interval_to_seconds(self) -> int:
+        """Convert a time interval string to seconds."""
+        unit_multipliers = {"m": 60, "h": 3600, "d": 86400}
+
+        try:
+            value, unit = int(self.interval[:-1]), self.interval[-1]
+            if unit in unit_multipliers:
+                return value * unit_multipliers[unit]
+            else:
+                raise ValueError(f"Invalid interval format {self.interval}")
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Invalid interval format {self.interval}") from e
 
     def get_current_price(self, currency="USD"):
         """Fetch the current price from Coinpaprika."""
@@ -55,8 +73,9 @@ class CoinPaprika:
             logger.exception(f"Failed to fetch exchange USD price: {e}")
             return None
 
-    def calculate_start_date(self, interval: str) -> str:
+    def calculate_start_date(self, interval: str, existing_timestamp=None) -> str:
         now = datetime.utcnow()
+        intervals = self.interval_to_seconds()
 
         if interval in {"24h", "1d", "7d", "14d", "30d", "90d", "365d"}:
             start_date = now - timedelta(days=365) + timedelta(seconds=60)
@@ -65,19 +84,50 @@ class CoinPaprika:
         else:
             raise ValueError("Invalid interval format")
 
+        if existing_timestamp:
+            start_date_existing = datetime.utcfromtimestamp(
+                existing_timestamp[-1] + 2 * intervals
+            )
+            if start_date < start_date_existing:
+                start_date = start_date_existing
+
         return start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def get_history_price(self, currency):
+    def get_history_price(self, existing_timestamp=None):
         """Fetch historical prices from CoinPaprika."""
         logger.info(f"Getting historical data for a {self.interval} interval")
-        start_date = self.calculate_start_date(self.interval)
-        print(start_date)
+        start_date = self.calculate_start_date(
+            self.interval, existing_timestamp=existing_timestamp
+        )
         timeseries = self.api_client.historical(
             self.whichcoin,
-            quotes=currency,
+            quotes="USD",
             interval=self.interval,
             start=start_date,
         )
-        timeseries_stack = [float(price["price"]) for price in timeseries]
-        timeseries_stack.append(self.get_current_price(currency))
-        return timeseries_stack
+        price_timeseries = PriceTimeSeries()
+        for price in timeseries:
+            dt = datetime.strptime(price["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
+            price_timeseries.add_price(dt, price["price"])
+        return price_timeseries
+
+    def get_ohlc(self):
+        start_date = self.calculate_start_date("1h", existing_timestamp=None)
+        raw_ohlc = self.api_client.ohlcv(self.whichcoin, start=start_date)
+        timeseries = [
+            {
+                "time": datetime.strptime(ohlc["time_open"], "%Y-%m-%dT%H:%M:%SZ"),
+                "ohlc": [ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"]],
+            }
+            for ohlc in raw_ohlc
+            if (
+                datetime.strptime(raw_ohlc[-1]["time_open"], "%Y-%m-%dT%H:%M:%SZ")
+                - datetime.strptime(ohlc["time_open"], "%Y-%m-%dT%H:%M:%SZ")
+            ).days
+            <= self.days_ago
+        ]
+        return pd.DataFrame(
+            [ohlc["ohlc"] for ohlc in timeseries],
+            index=[ohlc["time"] for ohlc in timeseries],
+            columns=["Open", "High", "Low", "Close"],
+        )

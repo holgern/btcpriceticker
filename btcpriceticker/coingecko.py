@@ -4,6 +4,8 @@ from datetime import datetime
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
 
+from .price_timeseries import PriceTimeSeries
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,10 +48,12 @@ class CoinGecko:
         raw_data = self.cg.get_coin_market_chart_by_id(
             self.whichcoin, currency, self.days_ago
         )
+        price_timeseries = PriceTimeSeries()
         timeseries = raw_data.get("prices", [])
-        timeseries_stack = [float(price[1]) for price in timeseries]
-        timeseries_stack.append(self.get_current_price(currency))
-        return timeseries_stack
+        for price in timeseries:
+            dt = datetime.fromtimestamp(float(price[0]) / 1000)
+            price_timeseries.add_price(dt, float(price[1]))
+        return price_timeseries
 
     def get_ohlc(self, currency):
         """Fetch OHLC data based on the number of days ago."""
