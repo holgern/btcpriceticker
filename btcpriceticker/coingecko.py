@@ -4,16 +4,30 @@ from datetime import datetime
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
 
-from .price_timeseries import PriceTimeSeries
+from .service import Service
 
 logger = logging.getLogger(__name__)
 
 
-class CoinGecko:
-    def __init__(self, whichcoin="bitcoin", days_ago=1):
+class CoinGecko(Service):
+    def __init__(
+        self,
+        fiat,
+        whichcoin="bitcoin",
+        days_ago=1,
+        enable_timeseries=True,
+        enable_ohlc=True,
+    ):
         self.cg = CoinGeckoAPI()
         self.whichcoin = whichcoin
-        self.days_ago = days_ago
+        self.initialize(
+            fiat,
+            days_ago=days_ago,
+            enable_timeseries=enable_timeseries,
+            enable_ohlc=enable_ohlc,
+        )
+        self.name = "coingecko"
+        self.has_ohlc = True
 
     def get_current_price(self, currency):
         """Fetch the current price for the given currency from CoinGecko."""
@@ -42,18 +56,37 @@ class CoinGecko:
             logger.error(f"Failed to retrieve exchange price for {exchange}")
             return None
 
-    def get_history_price(self, currency):
+    def interval_to_seconds(self) -> int:
+        return 60 * 5
+
+    def get_history_price(self, currency, existing_timestamp=None):
+        if existing_timestamp:
+            now = datetime.utcnow()
+            intervals = self.interval_to_seconds()
+            start_time = datetime.utcfromtimestamp(existing_timestamp[-1] + intervals)
+            raw_data = self.cg.get_coin_market_chart_range_by_id(
+                self.whichcoin,
+                currency,
+                from_timestamp=start_time.timestamp(),
+                to_timestamp=now.timestamp(),
+            )
+        else:
+            raw_data = self.cg.get_coin_market_chart_by_id(
+                self.whichcoin, currency, self.days_ago
+            )
+        return raw_data
+
+    def update_price_history(self, currency):
         """Fetch historical prices from CoinGecko."""
         logger.info(f"Getting historical data for {self.days_ago} days")
-        raw_data = self.cg.get_coin_market_chart_by_id(
-            self.whichcoin, currency, self.days_ago
+        existing_timestamp = self.price_history.get_timestamp_list()
+        raw_data = self.get_history_price(
+            currency, existing_timestamp=existing_timestamp
         )
-        price_timeseries = PriceTimeSeries()
         timeseries = raw_data.get("prices", [])
         for price in timeseries:
             dt = datetime.fromtimestamp(float(price[0]) / 1000)
-            price_timeseries.add_price(dt, float(price[1]))
-        return price_timeseries
+            self.price_history.add_price(dt, float(price[1]))
 
     def get_ohlc(self, currency):
         """Fetch OHLC data based on the number of days ago."""

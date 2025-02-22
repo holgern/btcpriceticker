@@ -4,7 +4,6 @@ from datetime import datetime
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
 from .mempool import Mempool
-from .price_timeseries import PriceTimeSeries
 
 logger = logging.getLogger(__name__)
 
@@ -22,81 +21,91 @@ class Price:
         enable_timeseries=True,
     ):
         self.days_ago = days_ago
-        self.coingecko = CoinGecko(whichcoin="bitcoin", days_ago=days_ago)
-        self.coinpaprika = CoinPaprika(whichcoin="btc-bitcoin", interval=interval)
-        self.mempool = Mempool(interval=interval, days_ago=days_ago)
-        if enable_ohlc:
-            service = "coingecko"
+        self.interval = interval
+        self.available_services = ["mempool", "coingecko", "coinpaprika"]
+        if service not in self.available_services:
+            raise ValueError("Wrong service!")
+        self.services = {}
         self.service = service
+        if enable_ohlc:
+            self.current_service = "coingecko"
+        self.set_service(
+            service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
+        )
         self.min_refresh_time = min_refresh_time  # seconds
         self.fiat = fiat
-        self.ohlc = {}
-        self.price = {"usd": 0, "sat_usd": 0, "fiat": 0, "sat_fiat": 0, "timestamp": 0}
         self.enable_ohlc = enable_ohlc
         self.enable_timeseries = enable_timeseries
-        self.timeseries = PriceTimeSeries()
 
-    def get_next_service(self, service):
-        if service == "coingecko":
-            return "coinpaprika"
-        elif service == "coinpaprika":
-            return "mempool"
-        elif service == "mempool":
-            return "coingecko"
-
-    def _fetch_prices_from_coingecko(self):
-        """Fetch prices and OHLC data from CoinGecko."""
-        self.price["usd"] = self.coingecko.get_current_price("usd")
-        self.price["sat_usd"] = 1e8 / self.price["usd"]
-        self.price["fiat"] = self.coingecko.get_current_price(self.fiat)
-        self.price["sat_fiat"] = 1e8 / self.price["fiat"]
-        if self.enable_ohlc:
-            self.ohlc = self.coingecko.get_ohlc(self.fiat)
-        if self.enable_timeseries:
-            history_price = self.coingecko.get_history_price(self.fiat)
-            self.timeseries.append_dataframe(history_price.data)
-        now = datetime.utcnow()
-        self.timeseries.add_price(now, self.price["fiat"])
-
-    def _fetch_prices_from_coinpaprika(self):
-        """Fetch prices from Coinpaprika."""
-        self.price["usd"] = self.coinpaprika.get_current_price("USD")
-        self.price["sat_usd"] = 1e8 / self.price["usd"]
-        self.price["fiat"] = self.coinpaprika.get_current_price(self.fiat.upper())
-        self.price["sat_fiat"] = 1e8 / self.price["fiat"]
-        if self.enable_timeseries:
-            existing_timestamp = self.timeseries.get_timestamp_list()
-            history_price = self.coinpaprika.get_history_price(
-                existing_timestamp=existing_timestamp
+    def set_next_service(self):
+        fiat = self.fiat
+        service_name = self.service
+        interval = self.interval
+        days_ago = self.days_ago
+        enable_ohlc = self.enable_ohlc
+        enable_timeseries = self.enable_timeseries
+        if service_name == "coingecko":
+            self.set_service(
+                "coinpaprika", fiat, interval, days_ago, enable_ohlc, enable_timeseries
             )
-            self.timeseries.append_dataframe(history_price.data)
-        else:
-            now = datetime.utcnow()
-            self.timeseries.add_price(now, self.price["fiat"])
-        if self.enable_ohlc:
-            self.ohlc = self.timeseries.resample_to_ohlc(self.ohlc_interval)
-
-    def _fetch_prices_from_mempool(self):
-        """Fetch prices from Mempool."""
-        self.price["usd"] = self.mempool.get_current_price("USD")
-        self.price["sat_usd"] = 1e8 / self.price["usd"]
-        self.price["fiat"] = self.mempool.get_current_price(self.fiat.upper())
-        self.price["sat_fiat"] = 1e8 / self.price["fiat"]
-        if self.enable_timeseries:
-            existing_timestamp = self.timeseries.get_timestamp_list()
-            history_price = self.mempool.get_history_price(
-                self.fiat.upper(),
-                existing_timestamp=existing_timestamp,
+        elif service_name == "coinpaprika":
+            self.set_service(
+                "mempool", fiat, interval, days_ago, enable_ohlc, enable_timeseries
             )
-            self.timeseries.append_dataframe(history_price.data)
-        else:
-            now = datetime.utcnow()
-            self.timeseries.add_price(now, self.price["fiat"])
-        if self.enable_ohlc:
-            self.ohlc = self.timeseries.resample_to_ohlc(self.ohlc_interval)
+        elif service_name == "mempool":
+            self.set_service(
+                "coingecko", fiat, interval, days_ago, enable_ohlc, enable_timeseries
+            )
 
-    def refresh(self, service=None):
+    def set_service(
+        self, service_name, fiat, interval, days_ago, enable_ohlc, enable_timeseries
+    ):
+        service = False
+        if service_name in self.services:
+            return
+        if service_name == "coingecko":
+            service = CoinGecko(
+                fiat,
+                whichcoin="bitcoin",
+                days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
+                enable_timeseries=enable_timeseries,
+            )
+        elif service_name == "coinpaprika":
+            service = CoinPaprika(
+                fiat,
+                whichcoin="btc-bitcoin",
+                interval=interval,
+                enable_timeseries=enable_timeseries,
+            )
+        elif service_name == "mempool":
+            service = Mempool(
+                fiat,
+                interval=interval,
+                days_ago=days_ago,
+                enable_timeseries=enable_timeseries,
+            )
+        if service:
+            self.service = service_name
+            self.services[service_name] = service
+
+    def _fetch_prices(self):
+        """Fetch prices and OHLC data from Service."""
+        if self.service not in self.services:
+            self.set_next_service()
+        self.services[self.service].update()
+
+    def refresh(self):
         """Refresh the price data if necessary."""
+        count = 0
+        refresh_sucess = self.update_service()
+        while not refresh_sucess and count < 3:
+            self.set_next_service()
+            refresh_sucess = self.update_service()
+            count += 1
+        return refresh_sucess
+
+    def update_service(self):
         now = datetime.utcnow()
         current_time = now.timestamp()
 
@@ -107,49 +116,38 @@ class Price:
             return True
 
         logger.info("Fetching price data...")
-        if service is None:
-            service = self.service
-        self.price = {}
-        if self.service == "coingecko":
-            try:
-                self._fetch_prices_from_coingecko()
-                self.price["timestamp"] = current_time
-                return True
-            except Exception as e:
-                logger.warning(f"Failed to fetch from CoinGecko: {str(e)}")
-        elif self.service == "coinpaprika":
-            try:
-                self._fetch_prices_from_coinpaprika()
-                self.price["timestamp"] = current_time
-                return True
-            except Exception as e:
-                logger.warning(f"Failed to fetch from CoinPaprika: {str(e)}")
-        else:
-            try:
-                self._fetch_prices_from_mempool()
-                self.price["timestamp"] = current_time
-                return True
-            except Exception as e:
-                logger.warning(f"Failed to fetch from mempool: {str(e)}")
+        try:
+            self._fetch_prices()
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to fetch from  {self.service}: {str(e)}")
         return False
 
+    def get_price_list(self):
+        return self.services[self.service].get_price_list()
+
     def get_timeseries_list(self):
-        return self.timeseries.get_price_list(days=self.days_ago)
+        return self.get_price_list()
 
     @property
     def timeseries_stack(self):
-        return self.get_timeseries_list()
+        return self.get_price_list()
+
+    @property
+    def price(self):
+        return self.services[self.service].get_price()
+
+    @property
+    def ohlc(self):
+        return self.services[self.service].ohlc
 
     def set_days_ago(self, days_ago):
-        self.coingecko.days_ago = days_ago
         self.days_ago = days_ago
-        self.mempool.days_ago = days_ago
+        for service in self.services:
+            self.services[service].days_ago = days_ago
 
     def get_price_change(self):
-        change_percentage = self.timeseries.get_percentage_change(self.days_ago)
-        if not change_percentage:
-            return ""
-        return f"{change_percentage:+.2f}%"
+        return self.services[self.service].get_price_change()
 
     def get_fiat_price(self):
         return self.price["fiat"]
@@ -167,13 +165,6 @@ class Price:
         return self.price["timestamp"]
 
     def get_price_now(self):
-        refresh_sucess = False
-        service = self.service
-        count = 0
-        while not refresh_sucess and count < 3:
-            service = self.get_next_service(service)
-            refresh_sucess = self.refresh(service)
-            count += 1
-
+        self.update_service()
         price_now = self.price["fiat"]
         return f"{price_now:,.0f}" if price_now > 1000 else f"{price_now:.5g}"

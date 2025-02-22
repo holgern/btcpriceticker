@@ -9,7 +9,7 @@ class TestCoinpaprika(unittest.TestCase):
     def test_get_current_price(self, mock_for_coin):
         mock_for_coin.return_value = {"quotes": {"USD": {"price": 50000}}}
 
-        cp = CoinPaprika(whichcoin="btc-bitcoin")
+        cp = CoinPaprika("USD", whichcoin="btc-bitcoin")
         price = cp.get_current_price("USD")
         self.assertEqual(price, 50000)
 
@@ -19,7 +19,7 @@ class TestCoinpaprika(unittest.TestCase):
             {"pair": "BTC/USDC", "quotes": {"USD": {"price": 50000}}}
         ]
 
-        cp = CoinPaprika(whichcoin="btc-bitcoin")
+        cp = CoinPaprika("USD", whichcoin="btc-bitcoin")
         price = cp.get_exchange_usd_price("binance", "BTC/USDC")
         self.assertEqual(price, 50000)
 

@@ -1,7 +1,9 @@
 import logging
 from datetime import datetime, timedelta
 
-from .price_timeseries import PriceTimeSeries
+import pandas as pd
+
+from .service import Service
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +16,24 @@ except ImportError:
     pass
 
 
-class Mempool:
-    def __init__(self, interval="1h", days_ago=1):
+class Mempool(Service):
+    def __init__(
+        self,
+        fiat,
+        interval="1h",
+        days_ago=1,
+        enable_timeseries=False,
+    ):
         self.api_client = MempoolAPI() if MEMPOOL_MODULE else None
-        self.interval = interval
-        self.days_ago = days_ago
+        self.initialize(
+            fiat,
+            interval=interval,
+            days_ago=days_ago,
+            enable_ohlc=False,
+            enable_timeseries=enable_timeseries,
+        )
+        self.name = "mempool"
+        self.has_ohlc = False
 
     def get_current_price(self, currency="USD"):
         """Fetch the current price from Mempool."""
@@ -26,7 +41,7 @@ class Mempool:
             return None
         try:
             ticker = self.api_client.get_price()
-            return float(ticker[currency])
+            return float(ticker[currency.upper()])
         except Exception as e:
             logger.exception(f"Failed to fetch current price: {e}")
             return None
@@ -70,14 +85,29 @@ class Mempool:
         return time_vector
 
     def get_history_price(self, currency, existing_timestamp=None):
-        """Fetch historical prices from Mempool."""
-        logger.info(f"Getting historical data for a {self.interval} interval")
+        history_prices = []
         time_vector = self.calculate_time_vector(existing_timestamp=existing_timestamp)
-        timeseries = PriceTimeSeries()
         for timestamp in time_vector:
             price = self.api_client.get_historical_price(
-                currency=currency, timestamp=timestamp
+                currency=currency.upper(), timestamp=timestamp
             )
-            price_value = float(price["prices"][0][currency])
-            timeseries.add_price(datetime.fromtimestamp(timestamp), price_value)
-        return timeseries
+            price_value = float(price["prices"][0][currency.upper()])
+            history_prices.append((datetime.fromtimestamp(timestamp), price_value))
+        return history_prices
+
+    def update_price_history(self, currency):
+        """Fetch historical prices from Mempool."""
+        logger.info(f"Getting historical data for a {self.interval} interval")
+        existing_timestamp = self.price_history.get_timestamp_list()
+        history_prices = self.get_history_price(
+            currency, existing_timestamp=existing_timestamp
+        )
+        for price_time, price_value in history_prices:
+            self.price_history.add_price(price_time, price_value)
+
+    def get_ohlc(self):
+        return pd.DataFrame(
+            [],
+            index=[],
+            columns=["Open", "High", "Low", "Close"],
+        )

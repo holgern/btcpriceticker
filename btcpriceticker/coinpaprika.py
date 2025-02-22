@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from .price_timeseries import PriceTimeSeries
+from .service import Service
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +16,27 @@ except ImportError:
     pass
 
 
-class CoinPaprika:
-    def __init__(self, whichcoin="btc-bitcoin", days_ago=1, interval="1h"):
+class CoinPaprika(Service):
+    def __init__(
+        self,
+        fiat,
+        whichcoin="btc-bitcoin",
+        days_ago=1,
+        interval="1h",
+        enable_timeseries=True,
+    ):
         self.api_client = Coinpaprika.Client() if COINPAPRIKA_MODULE else None
         self.whichcoin = whichcoin
-        self.interval = "1h"
-        self.days_ago = days_ago
+        interval = "1h"
+        self.initialize(
+            fiat,
+            interval=interval,
+            days_ago=days_ago,
+            enable_timeseries=enable_timeseries,
+        )
         self.coins = None
+        self.name = "coinpaprika"
+        self.has_ohlc = False
 
     def get_coin(self, name=None, symbol=None):
         if self.coins is None:
@@ -52,8 +66,8 @@ class CoinPaprika:
         if not self.api_client:
             return None
         try:
-            ticker = self.api_client.ticker(self.whichcoin, quotes=currency)
-            return float(ticker["quotes"][currency]["price"])
+            ticker = self.api_client.ticker(self.whichcoin, quotes=currency.upper())
+            return float(ticker["quotes"][currency.upper()]["price"])
         except Exception as e:
             logger.exception(f"Failed to fetch current price: {e}")
             return None
@@ -93,9 +107,7 @@ class CoinPaprika:
 
         return start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def get_history_price(self, existing_timestamp=None):
-        """Fetch historical prices from CoinPaprika."""
-        logger.info(f"Getting historical data for a {self.interval} interval")
+    def get_history_price(self, currency, existing_timestamp=None):
         start_date = self.calculate_start_date(
             self.interval, existing_timestamp=existing_timestamp
         )
@@ -105,11 +117,18 @@ class CoinPaprika:
             interval=self.interval,
             start=start_date,
         )
-        price_timeseries = PriceTimeSeries()
+        return timeseries
+
+    def update_price_history(self, currency):
+        """Fetch historical prices from CoinPaprika."""
+        logger.info(f"Getting historical data for a {self.interval} interval")
+        existing_timestamp = self.price_history.get_timestamp_list()
+        timeseries = self.get_history_price(
+            currency, existing_timestamp=existing_timestamp
+        )
         for price in timeseries:
             dt = datetime.strptime(price["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
-            price_timeseries.add_price(dt, price["price"])
-        return price_timeseries
+            self.price_history.add_price(dt, price["price"])
 
     def get_ohlc(self):
         start_date = self.calculate_start_date("1h", existing_timestamp=None)

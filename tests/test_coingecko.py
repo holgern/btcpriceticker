@@ -9,7 +9,7 @@ class TestCoinGecko(unittest.TestCase):
     def test_get_current_price(self, mock_get_coins_markets):
         mock_get_coins_markets.return_value = [{"current_price": 50000}]
 
-        cg = CoinGecko(whichcoin="bitcoin")
+        cg = CoinGecko("usd", whichcoin="bitcoin")
         price = cg.get_current_price("usd")
         self.assertEqual(price, 50000)
 
@@ -19,7 +19,7 @@ class TestCoinGecko(unittest.TestCase):
             "tickers": [{"target": "USD", "last": 50000}]
         }
 
-        cg = CoinGecko(whichcoin="bitcoin")
+        cg = CoinGecko("usd", whichcoin="bitcoin")
         price = cg.get_exchange_usd_price("binance")
         self.assertEqual(price, 50000)
 
@@ -33,9 +33,11 @@ class TestCoinGecko(unittest.TestCase):
         }
         mock_get_current_price.return_value = 50000.0
 
-        cg = CoinGecko(whichcoin="bitcoin", days_ago=1)
+        cg = CoinGecko("usd", whichcoin="bitcoin", days_ago=1)
         history = cg.get_history_price("usd")
-        self.assertEqual(history, [40000.0, 50000.0, 50000.0])
+        self.assertEqual(
+            history, {"prices": [[1609459200000, 40000], [1609545600000, 50000.0]]}
+        )
 
 
 if __name__ == "__main__":

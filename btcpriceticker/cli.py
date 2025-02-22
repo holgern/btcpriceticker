@@ -25,6 +25,19 @@ def price(symbol: str):
     print(price)
 
 
+@app.command()
+def history(symbol: str, interval: str):
+    p = Price(
+        service=state["service"],
+        fiat=symbol,
+        interval=interval,
+        enable_timeseries=True,
+        enable_ohlc=False,
+    )
+    p.refresh()
+    print(p.timeseries.data)
+
+
 @app.callback()
 def main(
     verbose: int = 3,

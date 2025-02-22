@@ -9,7 +9,7 @@ class TestMempool(unittest.TestCase):
     def test_get_current_price(self, mock_for_coin):
         mock_for_coin.return_value = {"USD": 50000}
 
-        m = Mempool()
+        m = Mempool("USD")
         price = m.get_current_price("USD")
         self.assertEqual(price, 50000)
 
