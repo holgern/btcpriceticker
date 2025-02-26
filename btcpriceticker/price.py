@@ -27,8 +27,6 @@ class Price:
             raise ValueError("Wrong service!")
         self.services = {}
         self.service = service
-        if enable_ohlc:
-            self.current_service = "coingecko"
         self.set_service(
             service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
         )
@@ -76,6 +74,7 @@ class Price:
                 fiat,
                 whichcoin="btc-bitcoin",
                 interval=interval,
+                enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
             )
         elif service_name == "mempool":
@@ -83,6 +82,7 @@ class Price:
                 fiat,
                 interval=interval,
                 days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
             )
         if service:

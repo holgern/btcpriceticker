@@ -23,17 +23,17 @@ class Mempool(Service):
         interval="1h",
         days_ago=1,
         enable_timeseries=False,
+        enable_ohlc=False,
     ):
         self.api_client = MempoolAPI() if MEMPOOL_MODULE else None
         self.initialize(
             fiat,
             interval=interval,
             days_ago=days_ago,
-            enable_ohlc=False,
             enable_timeseries=enable_timeseries,
+            enable_ohlc=enable_ohlc,
         )
         self.name = "mempool"
-        self.has_ohlc = False
 
     def get_current_price(self, currency="USD"):
         """Fetch the current price from Mempool."""
@@ -105,9 +105,10 @@ class Mempool(Service):
         for price_time, price_value in history_prices:
             self.price_history.add_price(price_time, price_value)
 
-    def get_ohlc(self):
-        return pd.DataFrame(
-            [],
-            index=[],
-            columns=["Open", "High", "Low", "Close"],
-        )
+    def get_ohlc(self, currency):
+        df = self.price_history.data.copy()
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df.set_index("timestamp", inplace=True)
+
+        ohlc_df = df["price"].resample("1h").ohlc()
+        return ohlc_df

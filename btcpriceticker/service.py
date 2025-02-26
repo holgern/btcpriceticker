@@ -23,7 +23,6 @@ class Service(metaclass=abc.ABCMeta):
         self.fiat = fiat
         self.enable_ohlc = enable_ohlc
         self.enable_timeseries = enable_timeseries
-        self.has_ohlc = False
         self.ohlc = {}
         self.price = {"usd": 0, "sat_usd": 0, "fiat": 0, "sat_fiat": 0, "timestamp": 0}
         self.price_history = PriceTimeSeries()
@@ -41,12 +40,12 @@ class Service(metaclass=abc.ABCMeta):
         self.price["sat_usd"] = 1e8 / self.price["usd"]
         self.price["fiat"] = self.get_current_price(self.fiat)
         self.price["sat_fiat"] = 1e8 / self.price["fiat"]
-        if self.enable_ohlc and self.has_ohlc:
-            self.ohlc = self.get_ohlc(self.fiat)
         if self.enable_timeseries:
             self.update_price_history(self.fiat)
         else:
             self.append_current_price(self.price["fiat"])
+        if self.enable_ohlc:
+            self.ohlc = self.get_ohlc(self.fiat)
 
         self.price["timestamp"] = current_time
 

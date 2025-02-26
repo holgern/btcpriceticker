@@ -38,6 +38,19 @@ def history(symbol: str, interval: str):
     print(p.timeseries.data)
 
 
+@app.command()
+def ohlc(symbol: str, interval: str):
+    p = Price(
+        service=state["service"],
+        fiat=symbol,
+        interval=interval,
+        enable_timeseries=True,
+        enable_ohlc=True,
+    )
+    p.refresh()
+    print(p.ohlc)
+
+
 @app.callback()
 def main(
     verbose: int = 3,

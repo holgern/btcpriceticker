@@ -24,6 +24,7 @@ class CoinPaprika(Service):
         days_ago=1,
         interval="1h",
         enable_timeseries=True,
+        enable_ohlc=False,
     ):
         self.api_client = Coinpaprika.Client() if COINPAPRIKA_MODULE else None
         self.whichcoin = whichcoin
@@ -33,10 +34,10 @@ class CoinPaprika(Service):
             interval=interval,
             days_ago=days_ago,
             enable_timeseries=enable_timeseries,
+            enable_ohlc=enable_ohlc,
         )
         self.coins = None
         self.name = "coinpaprika"
-        self.has_ohlc = False
 
     def get_coin(self, name=None, symbol=None):
         if self.coins is None:
@@ -130,7 +131,7 @@ class CoinPaprika(Service):
             dt = datetime.strptime(price["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
             self.price_history.add_price(dt, price["price"])
 
-    def get_ohlc(self):
+    def get_ohlc(self, currency):
         start_date = self.calculate_start_date("1h", existing_timestamp=None)
         raw_ohlc = self.api_client.ohlcv(self.whichcoin, start=start_date)
         timeseries = [

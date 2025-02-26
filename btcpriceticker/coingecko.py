@@ -27,7 +27,6 @@ class CoinGecko(Service):
             enable_ohlc=enable_ohlc,
         )
         self.name = "coingecko"
-        self.has_ohlc = True
 
     def get_current_price(self, currency):
         """Fetch the current price for the given currency from CoinGecko."""
