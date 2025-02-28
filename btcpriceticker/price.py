@@ -35,25 +35,24 @@ class Price:
         self.enable_ohlc = enable_ohlc
         self.enable_timeseries = enable_timeseries
 
-    def set_next_service(self):
+    def set_next_service(self, next_service=None):
         fiat = self.fiat
         service_name = self.service
         interval = self.interval
         days_ago = self.days_ago
         enable_ohlc = self.enable_ohlc
         enable_timeseries = self.enable_timeseries
-        if service_name == "coingecko":
-            self.set_service(
-                "coinpaprika", fiat, interval, days_ago, enable_ohlc, enable_timeseries
-            )
-        elif service_name == "coinpaprika":
-            self.set_service(
-                "mempool", fiat, interval, days_ago, enable_ohlc, enable_timeseries
-            )
-        elif service_name == "mempool":
-            self.set_service(
-                "coingecko", fiat, interval, days_ago, enable_ohlc, enable_timeseries
-            )
+        if next_service is None:
+            if service_name == "coingecko":
+                next_service = "coinpaprika"
+            elif service_name == "coinpaprika":
+                next_service = "mempool"
+            elif service_name == "mempool":
+                next_service = "coingecko"
+
+        self.set_service(
+            next_service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
+        )
 
     def set_service(
         self, service_name, fiat, interval, days_ago, enable_ohlc, enable_timeseries
@@ -99,10 +98,13 @@ class Price:
         """Refresh the price data if necessary."""
         count = 0
         refresh_sucess = self.update_service()
+        old_service_name = self.service
         while not refresh_sucess and count < 3:
             self.set_next_service()
             refresh_sucess = self.update_service()
             count += 1
+
+        self.set_next_service(next_service=old_service_name)
         return refresh_sucess
 
     def update_service(self):
