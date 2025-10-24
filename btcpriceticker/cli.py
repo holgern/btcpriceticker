@@ -11,7 +11,6 @@ app = typer.Typer()
 console = Console()
 
 
-
 class State(TypedDict):
     verbose: int
     service: str

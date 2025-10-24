@@ -26,9 +26,7 @@ class Mempool(Service):
         enable_timeseries=False,
         enable_ohlc=False,
     ):
-        self.api_client: Optional[Any] = (
-            MempoolAPI() if MEMPOOL_MODULE else None
-        )
+        self.api_client: Optional[Any] = MempoolAPI() if MEMPOOL_MODULE else None
         self.initialize(
             fiat,
             interval=interval,
