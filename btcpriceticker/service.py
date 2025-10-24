@@ -1,13 +1,14 @@
 import abc
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from .price_timeseries import PriceTimeSeries
 
 
 class Service(metaclass=abc.ABCMeta):
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def __init__(self, fiat):
-        self.interval(fiat)
+        self.initialize(fiat)
 
     def initialize(
         self,
@@ -24,7 +25,13 @@ class Service(metaclass=abc.ABCMeta):
         self.enable_ohlc = enable_ohlc
         self.enable_timeseries = enable_timeseries
         self.ohlc = {}
-        self.price = {"usd": 0, "sat_usd": 0, "fiat": 0, "sat_fiat": 0, "timestamp": 0}
+        self.price = {
+            "usd": 0.0,
+            "sat_usd": 0.0,
+            "fiat": 0.0,
+            "sat_fiat": 0.0,
+            "timestamp": 0.0,
+        }
         self.price_history = PriceTimeSeries()
 
     def get_name(self):
@@ -33,13 +40,31 @@ class Service(metaclass=abc.ABCMeta):
     def get_price(self):
         return self.price
 
+    def _safe_get_current_price(self, currency: str) -> Optional[float]:
+        variations = (currency, currency.upper(), currency.lower())
+        for variant in variations:
+            try:
+                price = self.get_current_price(variant)
+            except Exception:
+                continue
+            if price is not None:
+                return price
+        return None
+
     def update(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         current_time = now.timestamp()
-        self.price["usd"] = self.get_current_price("usd")
-        self.price["sat_usd"] = 1e8 / self.price["usd"]
-        self.price["fiat"] = self.get_current_price(self.fiat)
-        self.price["sat_fiat"] = 1e8 / self.price["fiat"]
+
+        # Get USD price, defaulting to 0.0 if None is returned
+        usd_price = self._safe_get_current_price("USD")
+        self.price["usd"] = usd_price if usd_price is not None else 0.0
+        self.price["sat_usd"] = 1e8 / self.price["usd"] if self.price["usd"] else 0.0
+
+        # Get fiat price, defaulting to 0.0 if None is returned
+        fiat_price = self._safe_get_current_price(self.fiat)
+        self.price["fiat"] = fiat_price if fiat_price is not None else 0.0
+        self.price["sat_fiat"] = 1e8 / self.price["fiat"] if self.price["fiat"] else 0.0
+
         if self.enable_timeseries:
             self.update_price_history(self.fiat)
         else:
@@ -50,7 +75,7 @@ class Service(metaclass=abc.ABCMeta):
         self.price["timestamp"] = current_time
 
     def append_current_price(self, current_price):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self.price_history.add_price(now, current_price)
 
     def get_price_list(self):
@@ -63,17 +88,17 @@ class Service(metaclass=abc.ABCMeta):
         return f"{change_percentage:+.2f}%"
 
     @abc.abstractmethod
-    def get_current_price(self, currency):
+    def get_current_price(self, currency) -> Optional[float]:
         pass
 
     @abc.abstractmethod
-    def get_history_price(self, currency, existing_timestamp=None):
+    def get_history_price(self, currency, existing_timestamp=None) -> Any:
         pass
 
     @abc.abstractmethod
-    def update_price_history(self, currency):
+    def update_price_history(self, currency) -> None:
         pass
 
     @abc.abstractmethod
-    def get_ohlc(self, currency):
+    def get_ohlc(self, currency) -> dict:
         pass

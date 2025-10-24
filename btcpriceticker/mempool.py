@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -25,7 +26,9 @@ class Mempool(Service):
         enable_timeseries=False,
         enable_ohlc=False,
     ):
-        self.api_client = MempoolAPI() if MEMPOOL_MODULE else None
+        self.api_client: Optional[Any] = (
+            MempoolAPI() if MEMPOOL_MODULE else None
+        )
         self.initialize(
             fiat,
             interval=interval,
@@ -35,7 +38,7 @@ class Mempool(Service):
         )
         self.name = "mempool"
 
-    def get_current_price(self, currency="USD"):
+    def get_current_price(self, currency="USD") -> Optional[float]:
         """Fetch the current price from Mempool."""
         if not self.api_client:
             return None
@@ -84,15 +87,21 @@ class Mempool(Service):
 
         return time_vector
 
-    def get_history_price(self, currency, existing_timestamp=None):
-        history_prices = []
+    def get_history_price(
+        self, currency, existing_timestamp=None
+    ) -> list[tuple[datetime, float]]:
+        history_prices: list[tuple[datetime, float]] = []
+        if self.api_client is None:
+            return history_prices
         time_vector = self.calculate_time_vector(existing_timestamp=existing_timestamp)
         for timestamp in time_vector:
             price = self.api_client.get_historical_price(
                 currency=currency.upper(), timestamp=timestamp
             )
             price_value = float(price["prices"][0][currency.upper()])
-            history_prices.append((datetime.fromtimestamp(timestamp), price_value))
+            history_prices.append(
+                (datetime.fromtimestamp(timestamp, tz=timezone.utc), price_value)
+            )
         return history_prices
 
     def update_price_history(self, currency):

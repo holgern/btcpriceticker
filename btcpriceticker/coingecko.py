@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
@@ -28,11 +29,12 @@ class CoinGecko(Service):
         )
         self.name = "coingecko"
 
-    def get_current_price(self, currency):
+    def get_current_price(self, currency) -> Optional[float]:
         """Fetch the current price for the given currency from CoinGecko."""
+        normalized_currency = currency.lower()
         try:
             return float(
-                self.cg.get_coins_markets(currency, ids=self.whichcoin)[0][
+                self.cg.get_coins_markets(normalized_currency, ids=self.whichcoin)[0][
                     "current_price"
                 ]
             )
@@ -58,24 +60,27 @@ class CoinGecko(Service):
     def interval_to_seconds(self) -> int:
         return 60 * 5
 
-    def get_history_price(self, currency, existing_timestamp=None):
+    def get_history_price(self, currency, existing_timestamp=None) -> dict:
+        normalized_currency = currency.lower()
         if existing_timestamp:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             intervals = self.interval_to_seconds()
-            start_time = datetime.utcfromtimestamp(existing_timestamp[-1] + intervals)
+            start_time = datetime.fromtimestamp(
+                existing_timestamp[-1] + intervals, tz=timezone.utc
+            )
             raw_data = self.cg.get_coin_market_chart_range_by_id(
                 self.whichcoin,
-                currency,
+                normalized_currency,
                 from_timestamp=start_time.timestamp(),
                 to_timestamp=now.timestamp(),
             )
         else:
             raw_data = self.cg.get_coin_market_chart_by_id(
-                self.whichcoin, currency, self.days_ago
+                self.whichcoin, normalized_currency, self.days_ago
             )
         return raw_data
 
-    def update_price_history(self, currency):
+    def update_price_history(self, currency) -> None:
         """Fetch historical prices from CoinGecko."""
         logger.info(f"Getting historical data for {self.days_ago} days")
         existing_timestamp = self.price_history.get_timestamp_list()
@@ -84,26 +89,35 @@ class CoinGecko(Service):
         )
         timeseries = raw_data.get("prices", [])
         for price in timeseries:
-            dt = datetime.fromtimestamp(float(price[0]) / 1000)
+            dt = datetime.fromtimestamp(float(price[0]) / 1000, tz=timezone.utc)
             self.price_history.add_price(dt, float(price[1]))
 
-    def get_ohlc(self, currency):
+    def get_ohlc(self, currency) -> dict:
         """Fetch OHLC data based on the number of days ago."""
+        normalized_currency = currency.lower()
         time_ranges = [1, 7, 14, 30, 90, 180, 365]
         duration = next((d for d in time_ranges if self.days_ago <= d), "max")
-        raw_ohlc = self.cg.get_coin_ohlc_by_id(self.whichcoin, currency, duration)
+        raw_ohlc = self.cg.get_coin_ohlc_by_id(
+            self.whichcoin, normalized_currency, duration
+        )
 
         timeseries = [
-            {"time": datetime.utcfromtimestamp(ohlc[0] / 1000), "ohlc": ohlc[1:]}
+            {
+                "time": datetime.fromtimestamp(ohlc[0] / 1000, tz=timezone.utc),
+                "ohlc": ohlc[1:],
+            }
             for ohlc in raw_ohlc
             if (
-                datetime.utcfromtimestamp(raw_ohlc[-1][0] / 1000)
-                - datetime.utcfromtimestamp(ohlc[0] / 1000)
+                datetime.fromtimestamp(raw_ohlc[-1][0] / 1000, tz=timezone.utc)
+                - datetime.fromtimestamp(ohlc[0] / 1000, tz=timezone.utc)
             ).days
             <= self.days_ago
         ]
-        return pd.DataFrame(
+
+        df = pd.DataFrame(
             [ohlc["ohlc"] for ohlc in timeseries],
-            index=[ohlc["time"] for ohlc in timeseries],
             columns=["Open", "High", "Low", "Close"],
         )
+        df.index = [ohlc["time"] for ohlc in timeseries]
+
+        return df.to_dict()

@@ -14,7 +14,7 @@ description = "Python lib for getting the bitcoin price"
 keywords = ["price", "btc", "ticker"]
 urls = { Homepage = "https://github.com/holgern/btcpriceticker" }
 readme = "README.md"
-requires-python = ">3.7.0"
+requires-python = ">3.8.0"
 dependencies = [
     "urllib3",
     "pycoingecko",
@@ -31,11 +31,11 @@ classifiers=[
     'License :: OSI Approved :: MIT License',
     'Operating System :: OS Independent',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
     'Topic :: Software Development :: Libraries',
 ]
 
@@ -58,3 +58,30 @@ deps =
 commands =
     pytest
 """
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = true
+warn_unreachable = false
+strict_equality = true
+exclude = [
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas",
+    "pycoingecko",
+    "coinpaprika",
+    "coinpaprika.client",
+    "pymempool",
+    "pymempool.api",
+]
+ignore_missing_imports = true

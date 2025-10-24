@@ -1,4 +1,5 @@
 import logging
+from typing import TypedDict
 
 import typer
 from rich.console import Console
@@ -9,7 +10,14 @@ log = logging.getLogger(__name__)
 app = typer.Typer()
 console = Console()
 
-state = {"verbose": 3}
+
+
+class State(TypedDict):
+    verbose: int
+    service: str
+
+
+state: State = {"verbose": 3, "service": "mempool"}
 
 
 @app.command()

@@ -1,9 +1,12 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
 from .mempool import Mempool
+from .price_timeseries import PriceTimeSeries
+from .service import Service
 
 logger = logging.getLogger(__name__)
 
@@ -11,21 +14,21 @@ logger = logging.getLogger(__name__)
 class Price:
     def __init__(
         self,
-        fiat="eur",
-        days_ago=1,
-        min_refresh_time=120,
-        interval="1h",
-        ohlc_interval="1h",
-        service="mempool",
-        enable_ohlc=False,
-        enable_timeseries=True,
-    ):
+        fiat: str = "eur",
+        days_ago: int = 1,
+        min_refresh_time: int = 120,
+        interval: str = "1h",
+        ohlc_interval: str = "1h",
+        service: str = "mempool",
+        enable_ohlc: bool = False,
+        enable_timeseries: bool = True,
+    ) -> None:
         self.days_ago = days_ago
         self.interval = interval
         self.available_services = ["mempool", "coingecko", "coinpaprika"]
         if service not in self.available_services:
             raise ValueError("Wrong service!")
-        self.services = {}
+        self.services: dict[str, Service] = {}
         self.service = service
         self.set_service(
             service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
@@ -35,7 +38,7 @@ class Price:
         self.enable_ohlc = enable_ohlc
         self.enable_timeseries = enable_timeseries
 
-    def set_next_service(self, next_service=None):
+    def set_next_service(self, next_service: Optional[str] = None) -> None:
         fiat = self.fiat
         service_name = self.service
         interval = self.interval
@@ -50,18 +53,29 @@ class Price:
             elif service_name == "mempool":
                 next_service = "coingecko"
 
+        if next_service is None:
+            raise ValueError("Unable to determine the next service")
+
         self.set_service(
             next_service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
         )
 
     def set_service(
-        self, service_name, fiat, interval, days_ago, enable_ohlc, enable_timeseries
-    ):
-        service = False
+        self,
+        service_name: str,
+        fiat: str,
+        interval: str,
+        days_ago: int,
+        enable_ohlc: bool,
+        enable_timeseries: bool,
+    ) -> None:
         if service_name in self.services:
+            self.service = service_name
             return
+
+        service_instance: Optional[Service] = None
         if service_name == "coingecko":
-            service = CoinGecko(
+            service_instance = CoinGecko(
                 fiat,
                 whichcoin="bitcoin",
                 days_ago=days_ago,
@@ -69,7 +83,7 @@ class Price:
                 enable_timeseries=enable_timeseries,
             )
         elif service_name == "coinpaprika":
-            service = CoinPaprika(
+            service_instance = CoinPaprika(
                 fiat,
                 whichcoin="btc-bitcoin",
                 interval=interval,
@@ -77,16 +91,19 @@ class Price:
                 enable_timeseries=enable_timeseries,
             )
         elif service_name == "mempool":
-            service = Mempool(
+            service_instance = Mempool(
                 fiat,
                 interval=interval,
                 days_ago=days_ago,
                 enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
             )
-        if service:
-            self.service = service_name
-            self.services[service_name] = service
+
+        if service_instance is None:
+            raise ValueError(f"Unsupported service '{service_name}'")
+
+        self.service = service_name
+        self.services[service_name] = service_instance
 
     def _fetch_prices(self):
         """Fetch prices and OHLC data from Service."""
@@ -108,7 +125,7 @@ class Price:
         return refresh_sucess
 
     def update_service(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         current_time = now.timestamp()
 
         if (
@@ -143,30 +160,34 @@ class Price:
     def ohlc(self):
         return self.services[self.service].ohlc
 
-    def set_days_ago(self, days_ago):
+    def set_days_ago(self, days_ago: int) -> None:
         self.days_ago = days_ago
         for service in self.services:
             self.services[service].days_ago = days_ago
 
-    def get_price_change(self):
+    def get_price_change(self) -> str:
         return self.services[self.service].get_price_change()
 
-    def get_fiat_price(self):
+    def get_fiat_price(self) -> float:
         return self.price["fiat"]
 
-    def get_usd_price(self):
+    def get_usd_price(self) -> float:
         return self.price["usd"]
 
-    def get_sats_per_fiat(self):
+    def get_sats_per_fiat(self) -> float:
         return 1e8 / self.price["fiat"]
 
-    def get_sats_per_usd(self):
+    def get_sats_per_usd(self) -> float:
         return 1e8 / self.price["usd"]
 
-    def get_timestamp(self):
+    def get_timestamp(self) -> float:
         return self.price["timestamp"]
 
-    def get_price_now(self):
+    def get_price_now(self) -> str:
         self.update_service()
         price_now = self.price["fiat"]
         return f"{price_now:,.0f}" if price_now > 1000 else f"{price_now:.5g}"
+
+    @property
+    def timeseries(self) -> PriceTimeSeries:
+        return self.services[self.service].price_history

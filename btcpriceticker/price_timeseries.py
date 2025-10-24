@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import pandas as pd
 
@@ -7,7 +8,7 @@ class PriceTimeSeries:
     def __init__(self):
         self.data = pd.DataFrame(columns=["timestamp", "price"])
 
-    def add_price(self, timestamp: datetime, price: float):
+    def add_price(self, timestamp: datetime, price: float) -> None:
         """Add a new price point to the time series."""
         new_data = pd.DataFrame([[timestamp, price]], columns=["timestamp", "price"])
         if not self.data.empty:
@@ -15,35 +16,35 @@ class PriceTimeSeries:
         else:
             self.data = new_data.reset_index(drop=True)
 
-    def get_price_list(self, days: int = None):
+    def get_price_list(self, days: Optional[int] = None) -> list[float]:
         """Return the time series as a list of (timestamp, price) tuples,
         optionally filtered by the last `days` days."""
         if days is not None:
-            cutoff = datetime.now() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             filtered_data = self.data[self.data["timestamp"] >= cutoff]
         else:
             filtered_data = self.data
         return filtered_data.loc[:, "price"].values.tolist()
 
-    def get_timestamp_list(self, days: int = None):
+    def get_timestamp_list(self, days: Optional[int] = None) -> list[float]:
         """Return the time series as a list of (timestamp, price) tuples,
         optionally filtered by the last `days` days."""
         if days is not None:
-            cutoff = datetime.now() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             filtered_data = self.data[self.data["timestamp"] >= cutoff]
         else:
             filtered_data = self.data
         return (filtered_data["timestamp"].astype("int64") / 1e9).values.tolist()
 
-    def get_data(self, days: int = None):
+    def get_data(self, days: Optional[int] = None) -> pd.DataFrame:
         """Return the time series as a Pandas DataFrame,
         optionally filtered by the last `days` days."""
         if days is not None:
-            cutoff = datetime.now() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             return self.data[self.data["timestamp"] >= cutoff]
         return self.data
 
-    def append_dataframe(self, other_df: pd.DataFrame):
+    def append_dataframe(self, other_df: pd.DataFrame) -> None:
         """Append another dataframe containing timestamp
         and price columns to the time series."""
         if not {"timestamp", "price"}.issubset(other_df.columns):
@@ -56,9 +57,9 @@ class PriceTimeSeries:
             self.data = other_df.reset_index(drop=True)
         self.data = self.data.sort_values(by="timestamp").reset_index(drop=True)
 
-    def get_percentage_change(self, days: int):
+    def get_percentage_change(self, days: int) -> Optional[float]:
         """Return the percentage change in price from the past `days` days to now."""
-        cutoff = datetime.now() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         past_data = self.data[self.data["timestamp"] >= cutoff]
         if past_data.empty:
             return None
