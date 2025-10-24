@@ -4,3 +4,4 @@ pycoingecko
 coinpaprika-sdk
 pymempool
 pandas
+ccxt

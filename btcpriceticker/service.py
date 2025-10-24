@@ -2,6 +2,8 @@ import abc
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import pandas as pd
+
 from .price_timeseries import PriceTimeSeries
 
 
@@ -100,5 +102,5 @@ class Service(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_ohlc(self, currency) -> dict:
+    def get_ohlc(self, currency) -> pd.DataFrame:
         pass

@@ -92,7 +92,7 @@ class CoinGecko(Service):
             dt = datetime.fromtimestamp(float(price[0]) / 1000, tz=timezone.utc)
             self.price_history.add_price(dt, float(price[1]))
 
-    def get_ohlc(self, currency) -> dict:
+    def get_ohlc(self, currency) -> pd.DataFrame:
         """Fetch OHLC data based on the number of days ago."""
         normalized_currency = currency.lower()
         time_ranges = [1, 7, 14, 30, 90, 180, 365]
@@ -120,4 +120,4 @@ class CoinGecko(Service):
         )
         df.index = [ohlc["time"] for ohlc in timeseries]
 
-        return df.to_dict()
+        return df

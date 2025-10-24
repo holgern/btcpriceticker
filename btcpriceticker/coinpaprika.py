@@ -150,7 +150,7 @@ class CoinPaprika(Service):
             )
             self.price_history.add_price(dt, price["price"])
 
-    def get_ohlc(self, currency: str) -> dict:
+    def get_ohlc(self, currency: str) -> pd.DataFrame:
         if self.api_client is None:
             return {}
         start_date = self.calculate_start_date("1h", existing_timestamp=None)
@@ -180,4 +180,4 @@ class CoinPaprika(Service):
         )
         df.index = [ohlc["time"] for ohlc in timeseries]
 
-        return df.to_dict()
+        return df

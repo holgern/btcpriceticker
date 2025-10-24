@@ -4,6 +4,7 @@ from typing import Optional
 
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
+from .kraken import Kraken
 from .mempool import Mempool
 from .price_timeseries import PriceTimeSeries
 from .service import Service
@@ -25,7 +26,7 @@ class Price:
     ) -> None:
         self.days_ago = days_ago
         self.interval = interval
-        self.available_services = ["mempool", "coingecko", "coinpaprika"]
+        self.available_services = ["mempool", "coingecko", "coinpaprika", "kraken"]
         if service not in self.available_services:
             raise ValueError("Wrong service!")
         self.services: dict[str, Service] = {}
@@ -46,12 +47,12 @@ class Price:
         enable_ohlc = self.enable_ohlc
         enable_timeseries = self.enable_timeseries
         if next_service is None:
-            if service_name == "coingecko":
-                next_service = "coinpaprika"
-            elif service_name == "coinpaprika":
-                next_service = "mempool"
-            elif service_name == "mempool":
-                next_service = "coingecko"
+            rotation = ["mempool", "coingecko", "coinpaprika", "kraken"]
+            try:
+                current_index = rotation.index(service_name)
+            except ValueError:
+                current_index = -1
+            next_service = rotation[(current_index + 1) % len(rotation)]
 
         if next_service is None:
             raise ValueError("Unable to determine the next service")
@@ -93,6 +94,15 @@ class Price:
         elif service_name == "mempool":
             service_instance = Mempool(
                 fiat,
+                interval=interval,
+                days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
+                enable_timeseries=enable_timeseries,
+            )
+        elif service_name == "kraken":
+            service_instance = Kraken(
+                fiat,
+                base_asset="BTC",
                 interval=interval,
                 days_ago=days_ago,
                 enable_ohlc=enable_ohlc,

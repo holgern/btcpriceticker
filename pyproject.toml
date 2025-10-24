@@ -21,6 +21,7 @@ dependencies = [
     "coinpaprika-sdk",
     "pymempool",
     "pandas",
+    "ccxt",
     "typer",
     "rich",
     "requests"
@@ -83,5 +84,6 @@ module = [
     "coinpaprika.client",
     "pymempool",
     "pymempool.api",
+    "ccxt",
 ]
 ignore_missing_imports = true
