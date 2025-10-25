@@ -90,9 +90,7 @@ class Bitvavo(Service):
                 since=since,
             )
         except Exception as exc:  # pragma: no cover - network or API errors
-            logger.exception(
-                f"Failed to fetch historical prices for {symbol}: {exc}"
-            )
+            logger.exception(f"Failed to fetch historical prices for {symbol}: {exc}")
             return []
 
     def update_price_history(self, currency: str) -> None:

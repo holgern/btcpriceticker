@@ -1,4 +1,5 @@
 from .binance import Binance
+from .bit2me import Bit2Me
 from .bitvavo import Bitvavo
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
@@ -13,5 +14,6 @@ __all__ = [
     "Kraken",
     "Mempool",
     "Binance",
+    "Bit2Me",
     "Bitvavo",
 ]

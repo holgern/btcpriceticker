@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from .binance import Binance
+from .bit2me import Bit2Me
 from .bitvavo import Bitvavo
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
@@ -36,6 +37,7 @@ class Price:
             "kraken",
             "binance",
             "bitvavo",
+            "bit2me",
         ]
         if service not in self.available_services:
             raise ValueError("Wrong service!")
@@ -73,6 +75,7 @@ class Price:
                 "kraken",
                 "binance",
                 "bitvavo",
+                "bit2me",
             ]
             try:
                 current_index = rotation.index(service_name)
@@ -154,6 +157,16 @@ class Price:
             )
         elif service_name == "bitvavo":
             service_instance = Bitvavo(
+                fiat,
+                base_asset="BTC",
+                interval=interval,
+                days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
+                enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
+            )
+        elif service_name == "bit2me":
+            service_instance = Bit2Me(
                 fiat,
                 base_asset="BTC",
                 interval=interval,
