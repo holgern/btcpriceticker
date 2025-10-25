@@ -41,7 +41,10 @@ class TestPriceTimeSeries:
 
         other_df = pd.DataFrame(
             {
-                "timestamp": [base_time - timedelta(hours=1), base_time + timedelta(hours=1)],
+                "timestamp": [
+                    base_time - timedelta(hours=1),
+                    base_time + timedelta(hours=1),
+                ],
                 "price": [90.0, 110.0],
             }
         )

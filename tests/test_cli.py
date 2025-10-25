@@ -1,5 +1,6 @@
-from typer.testing import CliRunner
 from unittest.mock import MagicMock, patch
+
+from typer.testing import CliRunner
 
 from btcpriceticker import _version
 from btcpriceticker.cli import app, main, state

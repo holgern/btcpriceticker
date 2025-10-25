@@ -3,12 +3,14 @@
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/btcpriceticker)
 [![codecov](https://codecov.io/gh/holgern/btcpriceticker/graph/badge.svg?token=AtcFpVooWk)](https://codecov.io/gh/holgern/btcpriceticker)
 
-
 # btcpriceticker
 
 ## Overview
 
-`btcpriceticker` is a lightweight toolkit for fetching current and historical Bitcoin pricing data from multiple services. It powers both a handy CLI and a Python API that can return spot prices, time series, and OHLC or OHLCV candles for BTC against your preferred fiat currency.
+`btcpriceticker` is a lightweight toolkit for fetching current and historical Bitcoin
+pricing data from multiple services. It powers both a handy CLI and a Python API that
+can return spot prices, time series, and OHLC or OHLCV candles for BTC against your
+preferred fiat currency.
 
 ## Features
 
@@ -43,7 +45,8 @@ btcpriceticker ohlc usd 1h          # Display OHLC candles
 btcpriceticker ohlcv usd 1h         # Display OHLCV candles (requires services that support volume)
 ```
 
-Flags such as `--service` and `--verbose` allow switching providers and log verbosity, e.g. `btcpriceticker --service kraken price usd`.
+Flags such as `--service` and `--verbose` allow switching providers and log verbosity,
+e.g. `btcpriceticker --service kraken price usd`.
 
 ## Python API
 
@@ -58,7 +61,8 @@ ohlcv_frame = price.ohlcv
 change = price.get_price_change()
 ```
 
-The `Price` object caches provider instances and exposes helper methods such as `get_usd_price`, `get_timeseries_list`, and `set_next_service` for provider rotation.
+The `Price` object caches provider instances and exposes helper methods such as
+`get_usd_price`, `get_timeseries_list`, and `set_next_service` for provider rotation.
 
 ## Testing
 
@@ -78,7 +82,8 @@ pre-commit run --all-files
 
 ## Contributing
 
-Issues and pull requests are welcome. Please open an issue describing proposed changes and ensure tests pass before submitting.
+Issues and pull requests are welcome. Please open an issue describing proposed changes
+and ensure tests pass before submitting.
 
 ## License
 

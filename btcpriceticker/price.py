@@ -2,6 +2,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+from .binance import Binance
+from .bitvavo import Bitvavo
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
 from .kraken import Kraken
@@ -27,7 +29,14 @@ class Price:
     ) -> None:
         self.days_ago = days_ago
         self.interval = interval
-        self.available_services = ["mempool", "coingecko", "coinpaprika", "kraken"]
+        self.available_services = [
+            "mempool",
+            "coingecko",
+            "coinpaprika",
+            "kraken",
+            "binance",
+            "bitvavo",
+        ]
         if service not in self.available_services:
             raise ValueError("Wrong service!")
         self.services: dict[str, Service] = {}
@@ -57,7 +66,14 @@ class Price:
         enable_ohlcv = self.enable_ohlcv
         enable_timeseries = self.enable_timeseries
         if next_service is None:
-            rotation = ["mempool", "coingecko", "coinpaprika", "kraken"]
+            rotation = [
+                "mempool",
+                "coingecko",
+                "coinpaprika",
+                "kraken",
+                "binance",
+                "bitvavo",
+            ]
             try:
                 current_index = rotation.index(service_name)
             except ValueError:
@@ -118,6 +134,26 @@ class Price:
             )
         elif service_name == "kraken":
             service_instance = Kraken(
+                fiat,
+                base_asset="BTC",
+                interval=interval,
+                days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
+                enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
+            )
+        elif service_name == "binance":
+            service_instance = Binance(
+                fiat,
+                base_asset="BTC",
+                interval=interval,
+                days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
+                enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
+            )
+        elif service_name == "bitvavo":
+            service_instance = Bitvavo(
                 fiat,
                 base_asset="BTC",
                 interval=interval,
