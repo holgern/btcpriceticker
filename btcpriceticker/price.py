@@ -5,6 +5,7 @@ from typing import Optional
 from .binance import Binance
 from .bit2me import Bit2Me
 from .bitvavo import Bitvavo
+from .coinbase import Coinbase
 from .coingecko import CoinGecko
 from .coinpaprika import CoinPaprika
 from .kraken import Kraken
@@ -36,6 +37,7 @@ class Price:
             "coinpaprika",
             "kraken",
             "binance",
+            "coinbase",
             "bitvavo",
             "bit2me",
         ]
@@ -74,6 +76,7 @@ class Price:
                 "coinpaprika",
                 "kraken",
                 "binance",
+                "coinbase",
                 "bitvavo",
                 "bit2me",
             ]
@@ -147,6 +150,16 @@ class Price:
             )
         elif service_name == "binance":
             service_instance = Binance(
+                fiat,
+                base_asset="BTC",
+                interval=interval,
+                days_ago=days_ago,
+                enable_ohlc=enable_ohlc,
+                enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
+            )
+        elif service_name == "coinbase":
+            service_instance = Coinbase(
                 fiat,
                 base_asset="BTC",
                 interval=interval,
