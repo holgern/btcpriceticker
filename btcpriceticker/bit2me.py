@@ -8,7 +8,7 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import requests
@@ -48,7 +48,7 @@ class Bit2Me(Service):
         self.name = "bit2me"
 
     def _build_headers(
-        self, path_url: str, body: Optional[dict[str, Any]] = None
+        self, path_url: str, body: dict[str, Any] | None = None
     ) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
         if not self.api_key:
@@ -76,7 +76,7 @@ class Bit2Me(Service):
         return headers
 
     def _request(
-        self, method: str, endpoint: str, params: Optional[dict[str, Any]] = None
+        self, method: str, endpoint: str, params: dict[str, Any] | None = None
     ) -> Any:
         request = requests.Request(
             method,
@@ -107,7 +107,7 @@ class Bit2Me(Service):
         except ValueError:
             return response.text
 
-    def _map_chart_temporality(self) -> Optional[str]:
+    def _map_chart_temporality(self) -> str | None:
         mapping = {
             "1h": "one-hour",
             "4h": "four-hours",
@@ -134,7 +134,7 @@ class Bit2Me(Service):
         }
         return table.get(timeframe.upper(), 0)
 
-    def _get_usd_price(self) -> Optional[float]:
+    def _get_usd_price(self) -> float | None:
         try:
             data = self._request("GET", f"/v3/currency/ticker/{self.base_asset}")
         except RuntimeError:
@@ -184,7 +184,7 @@ class Bit2Me(Service):
             self._fiat_rates = rates
             self._fiat_rates_timestamp = time.time()
 
-    def _get_fiat_rate(self, currency: str) -> Optional[float]:
+    def _get_fiat_rate(self, currency: str) -> float | None:
         code = currency.upper()
         if code == "USD":
             return 1.0
@@ -201,7 +201,7 @@ class Bit2Me(Service):
         self._refresh_rates()
         return self._fiat_rates.get(code)
 
-    def get_current_price(self, currency: str) -> Optional[float]:
+    def get_current_price(self, currency: str) -> float | None:
         usd_price = self._get_usd_price()
         if usd_price is None:
             return None
@@ -227,7 +227,7 @@ class Bit2Me(Service):
         return []
 
     def get_history_price(
-        self, currency: str, existing_timestamp: Optional[list[float]] = None
+        self, currency: str, existing_timestamp: list[float] | None = None
     ) -> list[list[float]]:
         chart = self._chart(currency)
         if not chart:
@@ -264,7 +264,7 @@ class Bit2Me(Service):
             self.price_history.add_price(dt, price)
 
     def get_ohlcv(
-        self, currency: str, existing_timestamp: Optional[list[float]] = None
+        self, currency: str, existing_timestamp: list[float] | None = None
     ) -> pd.DataFrame:
         ohlc_df = self.get_ohlc(currency, existing_timestamp)
         if ohlc_df.empty:
@@ -274,7 +274,7 @@ class Bit2Me(Service):
         return ohlcv_df
 
     def get_ohlc(
-        self, currency: str, existing_timestamp: Optional[list[float]] = None
+        self, currency: str, existing_timestamp: list[float] | None = None
     ) -> pd.DataFrame:
         timeframe = self.interval.upper()
         interval_seconds = self._timeframe_to_seconds(timeframe)
@@ -315,7 +315,7 @@ class Bit2Me(Service):
         except RuntimeError:
             return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
 
-        rate_value: Optional[float] = None
+        rate_value: float | None = None
         if isinstance(rate_payload, list):
             for entry in rate_payload:
                 if not isinstance(entry, dict):

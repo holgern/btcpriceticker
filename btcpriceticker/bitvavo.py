@@ -63,6 +63,20 @@ class Bitvavo(Service):
             last_price = ticker.get("last") or ticker.get("close")
             return float(last_price) if last_price is not None else None
         except Exception as exc:  # pragma: no cover - network or API errors
+            bad_symbol_cls = getattr(ccxt, "BadSymbol", None)
+            if bad_symbol_cls and isinstance(exc, bad_symbol_cls):
+                if currency.upper() == "USD":
+                    for quote in ("USDT", "USDC"):
+                        alias_symbol = self._get_symbol(quote)
+                        try:
+                            ticker = self.exchange.fetch_ticker(alias_symbol)
+                            last_price = ticker.get("last") or ticker.get("close")
+                            if last_price is not None:
+                                return float(last_price)
+                        except Exception:  # pragma: no cover - network or API errors
+                            continue
+                logger.debug("Bitvavo does not support symbol %s", symbol)
+                return None
             logger.exception(f"Failed to fetch current price for {symbol}: {exc}")
             return None
 

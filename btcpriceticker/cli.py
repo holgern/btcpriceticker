@@ -34,9 +34,10 @@ def price(symbol: str):
 
 
 @app.command()
-def history(symbol: str, interval: str):
+def history(symbol: str, interval: str, days_ago: int = 1):
     p = Price(
         service=state["service"],
+        days_ago=days_ago,
         fiat=symbol,
         interval=interval,
         enable_ohlc=False,
@@ -48,9 +49,10 @@ def history(symbol: str, interval: str):
 
 
 @app.command()
-def ohlc(symbol: str, interval: str):
+def ohlc(symbol: str, interval: str, days_ago: int = 1):
     p = Price(
         service=state["service"],
+        days_ago=days_ago,
         fiat=symbol,
         interval=interval,
         enable_ohlc=True,
@@ -62,9 +64,10 @@ def ohlc(symbol: str, interval: str):
 
 
 @app.command()
-def ohlcv(symbol: str, interval: str):
+def ohlcv(symbol: str, interval: str, days_ago: int = 1):
     p = Price(
         service=state["service"],
+        days_ago=days_ago,
         fiat=symbol,
         interval=interval,
         enable_ohlc=False,

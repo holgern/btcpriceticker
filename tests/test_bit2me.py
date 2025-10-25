@@ -9,8 +9,9 @@ from btcpriceticker.bit2me import Bit2Me
 
 class TestBit2Me(unittest.TestCase):
     def test_get_current_price_converts_with_rate(self):
-        with patch.object(Bit2Me, "_get_usd_price", return_value=50000.0), patch.object(
-            Bit2Me, "_get_fiat_rate", return_value=0.9
+        with (
+            patch.object(Bit2Me, "_get_usd_price", return_value=50000.0),
+            patch.object(Bit2Me, "_get_fiat_rate", return_value=0.9),
         ):
             service = Bit2Me("EUR")
             price = service.get_current_price("EUR")
@@ -78,7 +79,9 @@ class TestBit2Me(unittest.TestCase):
 
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
-        self.assertListEqual(list(df.columns), ["Open", "High", "Low", "Close", "Volume"])
+        self.assertListEqual(
+            list(df.columns), ["Open", "High", "Low", "Close", "Volume"]
+        )
         assert df.iloc[0]["Volume"] == 0.0
 
 
