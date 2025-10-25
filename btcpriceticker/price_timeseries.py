@@ -79,10 +79,16 @@ class PriceTimeSeries:
             pd.DataFrame: DataFrame with columns ["Open", "High",
             "Low", "Close", "Volume"]
         """
+        if self.data.empty:
+            return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+
         df = self.data.copy()
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        df.set_index("time", inplace=True)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        df.set_index("timestamp", inplace=True)
 
-        ohlcv_df = df["price"].resample(time_frame).ohlcv()
+        ohlc = df["price"].resample(time_frame).agg(["first", "max", "min", "last"])
+        ohlc.columns = ["Open", "High", "Low", "Close"]
+        volume = df["price"].resample(time_frame).count().rename("Volume")
 
-        return ohlcv_df
+        ohlcv_df = pd.concat([ohlc, volume], axis=1)
+        return ohlcv_df.dropna(how="all")
