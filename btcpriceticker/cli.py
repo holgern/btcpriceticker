@@ -22,6 +22,10 @@ state: State = {"verbose": 3, "service": "mempool"}
 @app.command(help="Show the latest BTC price converted into the given fiat symbol.")
 def price(
     symbol: str = typer.Argument(..., help="Fiat currency code, e.g. 'EUR'."),
+    show_symbol: bool = typer.Option(
+        False, help="Displays the fiat currency symbol alongside the price."
+    ),
+    as_float: bool = typer.Option(False, help="Returns the price as float."),
 ):
     p = Price(
         service=state["service"],
@@ -31,8 +35,16 @@ def price(
         enable_ohlcv=False,
     )
     p.refresh()
-    price = p.get_price_now()
-    print(price)
+    if not as_float and show_symbol:
+        price = p.get_price_now()
+        symbol = p.get_fiat_symbol()
+        print(f"{price} {symbol}")
+    elif not as_float and not show_symbol:
+        price = p.get_price_now()
+        print(price)
+    else:
+        price = p.get_fiat_price()
+        print(price)
 
 
 @app.command(help="Display historical BTC prices for the requested interval.")

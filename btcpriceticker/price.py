@@ -262,6 +262,30 @@ class Price:
     def get_price_change(self) -> str:
         return self.services[self.service].get_price_change()
 
+    def get_fiat_currency(self) -> str:
+        return self.services[self.service].fiat.upper()
+
+    def get_fiat_symbol(self) -> str:
+        """Return the symbol of the fiat currency."""
+        fiat = self.get_fiat_currency().lower()
+        symbols = {
+            "eur": "€",
+            "usd": "$",
+            "gbp": "£",
+            "jpy": "¥",
+            "chf": "CHF",
+            "cad": "C$",
+            "aud": "A$",
+            "mxn": "$",
+            "brl": "R$",
+            "inr": "₹",
+            "cny": "¥",
+            "cnh": "¥",
+            "sek": "kr",
+            "nzd": "NZ$",
+        }
+        return symbols.get(fiat, fiat)
+
     def get_fiat_price(self) -> float:
         return self.price["fiat"]
 
