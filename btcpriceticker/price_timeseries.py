@@ -67,21 +67,22 @@ class PriceTimeSeries:
         current_price = self.data.iloc[-1]["price"]
         return ((current_price - past_price) / past_price) * 100 if past_price else None
 
-    def resample_to_ohlc(self, time_frame: str) -> pd.DataFrame:
+    def resample_to_ohlcv(self, time_frame: str) -> pd.DataFrame:
         """
-        Convert a dataframe with timestamp and price into an OHLC chart.
+        Convert a dataframe with timestamp and price into an OHLCV chart.
 
         Parameters:
             time_frame (str): Pandas-compatible resampling
             period (e.g., '1h', '1d', '15t')
 
         Returns:
-            pd.DataFrame: DataFrame with columns ["Open", "High", "Low", "Close"]
+            pd.DataFrame: DataFrame with columns ["Open", "High",
+            "Low", "Close", "Volume"]
         """
         df = self.data.copy()
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         df.set_index("time", inplace=True)
 
-        ohlc_df = df["price"].resample(time_frame).ohlc()
+        ohlcv_df = df["price"].resample(time_frame).ohlcv()
 
-        return ohlc_df
+        return ohlcv_df

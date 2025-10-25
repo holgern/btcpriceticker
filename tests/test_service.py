@@ -1,7 +1,9 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from unittest.mock import patch
+
+import pandas as pd
 
 from btcpriceticker.price_timeseries import PriceTimeSeries
 from btcpriceticker.service import Service
@@ -30,14 +32,27 @@ class MockService(Service):
         now = datetime.now(timezone.utc)
         self.price_history.add_price(now, 50000)
 
-    def get_ohlc(self, currency) -> dict:
-        # Mock implementation returns fixed OHLC data
-        return {
-            "Open": 49000,
-            "High": 51000,
-            "Low": 48000,
-            "Close": 50000,
-        }
+    def get_ohlc(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        base_time = datetime.now(timezone.utc)
+        if existing_timestamp:
+            base_time = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
+        index = pd.date_range(base_time + timedelta(hours=1), periods=1, freq="h")
+        return pd.DataFrame(
+            [[49000, 51000, 48000, 50000]],
+            columns=["Open", "High", "Low", "Close"],
+            index=index,
+        )
+
+    def get_ohlcv(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        base_time = datetime.now(timezone.utc)
+        if existing_timestamp:
+            base_time = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
+        index = pd.date_range(base_time + timedelta(hours=1), periods=1, freq="h")
+        return pd.DataFrame(
+            [[49000, 51000, 48000, 50000, 12345]],
+            columns=["Open", "High", "Low", "Close", "Volume"],
+            index=index,
+        )
 
 
 class TestService(unittest.TestCase):
@@ -49,6 +64,7 @@ class TestService(unittest.TestCase):
         self.assertEqual(self.service.fiat, "eur")
         self.assertEqual(self.service.days_ago, 1)
         self.assertEqual(self.service.name, "mock_service")
+        self.assertFalse(self.service.enable_ohlcv)
         self.assertFalse(self.service.enable_ohlc)
         self.assertFalse(self.service.enable_timeseries)
         self.assertEqual(self.service.price["usd"], 0)
@@ -127,21 +143,67 @@ class TestService(unittest.TestCase):
             self.service.update()
             mock_update.assert_called_once_with("eur")
 
+    def test_update_with_ohlcv_enabled(self):
+        """Test update with OHLCV enabled."""
+        self.service.enable_ohlcv = True
+
+        # Need to patch get_ohlcv to verify it's called
+        with patch.object(MockService, "get_ohlcv") as mock_ohlcv:
+            mock_ohlcv.return_value = pd.DataFrame(
+                [[49000, 51000, 48000, 50000, 12345]],
+                columns=["Open", "High", "Low", "Close", "Volume"],
+                index=pd.date_range(datetime.now(timezone.utc), periods=1, freq="h"),
+            )
+            self.service.update()
+            mock_ohlcv.assert_called_once()
+            args, kwargs = mock_ohlcv.call_args
+            self.assertEqual(args[0], "eur")
+            self.assertIn("existing_timestamp", kwargs)
+            self.assertIsInstance(self.service.ohlcv, pd.DataFrame)
+            self.assertFalse(self.service.ohlcv.empty)
+
     def test_update_with_ohlc_enabled(self):
         """Test update with OHLC enabled."""
         self.service.enable_ohlc = True
 
-        # Need to patch get_ohlc to verify it's called
         with patch.object(MockService, "get_ohlc") as mock_ohlc:
-            mock_ohlc.return_value = {
-                "Open": 49000,
-                "High": 51000,
-                "Low": 48000,
-                "Close": 50000,
-            }
+            mock_ohlc.return_value = pd.DataFrame(
+                [[49000, 51000, 48000, 50000]],
+                columns=["Open", "High", "Low", "Close"],
+                index=pd.date_range(datetime.now(timezone.utc), periods=1, freq="h"),
+            )
             self.service.update()
-            mock_ohlc.assert_called_once_with("eur")
-            self.assertEqual(self.service.ohlc["Open"], 49000)
+            mock_ohlc.assert_called_once()
+            args, kwargs = mock_ohlc.call_args
+            self.assertEqual(args[0], "eur")
+            self.assertIn("existing_timestamp", kwargs)
+            self.assertIsInstance(self.service.ohlc, pd.DataFrame)
+            self.assertFalse(self.service.ohlc.empty)
+
+    def test_update_ohlcv_accumulates(self):
+        self.service.enable_ohlcv = True
+        with patch.object(MockService, "get_ohlcv") as mock_ohlcv:
+            base_time = datetime.now(timezone.utc)
+            first_df = pd.DataFrame(
+                [[49000, 51000, 48000, 50000, 12345]],
+                columns=["Open", "High", "Low", "Close", "Volume"],
+                index=pd.date_range(base_time, periods=1, freq="h"),
+            )
+            second_df = pd.DataFrame(
+                [[50010, 51500, 48500, 50500, 23456]],
+                columns=["Open", "High", "Low", "Close", "Volume"],
+                index=pd.date_range(
+                    base_time + timedelta(hours=1), periods=1, freq="h"
+                ),
+            )
+            mock_ohlcv.side_effect = [first_df, second_df]
+
+            self.service.update()
+            self.service.update()
+
+            self.assertEqual(len(self.service.ohlcv), 2)
+            self.assertTrue((self.service.ohlcv.iloc[0] == first_df.iloc[0]).all())
+            self.assertTrue((self.service.ohlcv.iloc[1] == second_df.iloc[0]).all())
 
 
 if __name__ == "__main__":

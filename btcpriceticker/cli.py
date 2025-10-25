@@ -24,8 +24,9 @@ def price(symbol: str):
     p = Price(
         service=state["service"],
         fiat=symbol,
-        enable_timeseries=False,
         enable_ohlc=False,
+        enable_timeseries=False,
+        enable_ohlcv=False,
     )
     p.refresh()
     price = p.get_price_now()
@@ -38,8 +39,9 @@ def history(symbol: str, interval: str):
         service=state["service"],
         fiat=symbol,
         interval=interval,
-        enable_timeseries=True,
         enable_ohlc=False,
+        enable_timeseries=True,
+        enable_ohlcv=False,
     )
     p.refresh()
     print(p.timeseries.data)
@@ -51,11 +53,26 @@ def ohlc(symbol: str, interval: str):
         service=state["service"],
         fiat=symbol,
         interval=interval,
-        enable_timeseries=True,
         enable_ohlc=True,
+        enable_timeseries=True,
+        enable_ohlcv=False,
     )
     p.refresh()
     print(p.ohlc)
+
+
+@app.command()
+def ohlcv(symbol: str, interval: str):
+    p = Price(
+        service=state["service"],
+        fiat=symbol,
+        interval=interval,
+        enable_ohlc=False,
+        enable_timeseries=True,
+        enable_ohlcv=True,
+    )
+    p.refresh()
+    print(p.ohlcv)
 
 
 @app.callback()

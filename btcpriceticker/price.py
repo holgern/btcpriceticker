@@ -19,8 +19,9 @@ class Price:
         days_ago: int = 1,
         min_refresh_time: int = 120,
         interval: str = "1h",
-        ohlc_interval: str = "1h",
+        ohlcv_interval: str = "1h",
         service: str = "mempool",
+        enable_ohlcv: bool = False,
         enable_ohlc: bool = False,
         enable_timeseries: bool = True,
     ) -> None:
@@ -31,12 +32,20 @@ class Price:
             raise ValueError("Wrong service!")
         self.services: dict[str, Service] = {}
         self.service = service
+        self.enable_ohlcv = enable_ohlcv or enable_ohlc
         self.set_service(
-            service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
+            service,
+            fiat,
+            interval,
+            days_ago,
+            enable_ohlc,
+            enable_timeseries,
+            enable_ohlcv,
         )
         self.min_refresh_time = min_refresh_time  # seconds
         self.fiat = fiat
         self.enable_ohlc = enable_ohlc
+        self.enable_ohlcv = enable_ohlcv
         self.enable_timeseries = enable_timeseries
 
     def set_next_service(self, next_service: Optional[str] = None) -> None:
@@ -45,6 +54,7 @@ class Price:
         interval = self.interval
         days_ago = self.days_ago
         enable_ohlc = self.enable_ohlc
+        enable_ohlcv = self.enable_ohlcv
         enable_timeseries = self.enable_timeseries
         if next_service is None:
             rotation = ["mempool", "coingecko", "coinpaprika", "kraken"]
@@ -54,11 +64,14 @@ class Price:
                 current_index = -1
             next_service = rotation[(current_index + 1) % len(rotation)]
 
-        if next_service is None:
-            raise ValueError("Unable to determine the next service")
-
         self.set_service(
-            next_service, fiat, interval, days_ago, enable_ohlc, enable_timeseries
+            next_service,
+            fiat,
+            interval,
+            days_ago,
+            enable_ohlc,
+            enable_timeseries,
+            enable_ohlcv,
         )
 
     def set_service(
@@ -69,6 +82,7 @@ class Price:
         days_ago: int,
         enable_ohlc: bool,
         enable_timeseries: bool,
+        enable_ohlcv: bool,
     ) -> None:
         if service_name in self.services:
             self.service = service_name
@@ -82,6 +96,7 @@ class Price:
                 days_ago=days_ago,
                 enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
             )
         elif service_name == "coinpaprika":
             service_instance = CoinPaprika(
@@ -90,6 +105,7 @@ class Price:
                 interval=interval,
                 enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
             )
         elif service_name == "mempool":
             service_instance = Mempool(
@@ -98,6 +114,7 @@ class Price:
                 days_ago=days_ago,
                 enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
             )
         elif service_name == "kraken":
             service_instance = Kraken(
@@ -107,6 +124,7 @@ class Price:
                 days_ago=days_ago,
                 enable_ohlc=enable_ohlc,
                 enable_timeseries=enable_timeseries,
+                enable_ohlcv=enable_ohlcv,
             )
 
         if service_instance is None:
@@ -116,7 +134,7 @@ class Price:
         self.services[service_name] = service_instance
 
     def _fetch_prices(self):
-        """Fetch prices and OHLC data from Service."""
+        """Fetch prices and OHLCV data from Service."""
         if self.service not in self.services:
             self.set_next_service()
         self.services[self.service].update()
@@ -169,6 +187,10 @@ class Price:
     @property
     def ohlc(self):
         return self.services[self.service].ohlc
+
+    @property
+    def ohlcv(self):
+        return self.services[self.service].ohlcv
 
     def set_days_ago(self, days_ago: int) -> None:
         self.days_ago = days_ago

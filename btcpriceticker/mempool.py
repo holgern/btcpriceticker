@@ -23,16 +23,18 @@ class Mempool(Service):
         fiat,
         interval="1h",
         days_ago=1,
-        enable_timeseries=False,
         enable_ohlc=False,
+        enable_timeseries=False,
+        enable_ohlcv=False,
     ):
         self.api_client: Optional[Any] = MempoolAPI() if MEMPOOL_MODULE else None
         self.initialize(
             fiat,
             interval=interval,
             days_ago=days_ago,
-            enable_timeseries=enable_timeseries,
             enable_ohlc=enable_ohlc,
+            enable_timeseries=enable_timeseries,
+            enable_ohlcv=enable_ohlcv,
         )
         self.name = "mempool"
 
@@ -112,10 +114,19 @@ class Mempool(Service):
         for price_time, price_value in history_prices:
             self.price_history.add_price(price_time, price_value)
 
-    def get_ohlc(self, currency):
+    def get_ohlcv(self, currency, existing_timestamp=None):
         df = self.price_history.data.copy()
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         df.set_index("timestamp", inplace=True)
 
-        ohlc_df = df["price"].resample("1h").ohlc()
+        ohlcv_df = df["price"].resample("1h").ohlcv()
+        if existing_timestamp:
+            cutoff = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
+            ohlcv_df = ohlcv_df[ohlcv_df.index > cutoff]
+        return ohlcv_df
+
+    def get_ohlc(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        """Fetch OHLC data based on the number of days ago."""
+        ohlcv_df = self.get_ohlcv(currency, existing_timestamp)
+        ohlc_df = ohlcv_df.drop(columns=["Volume"])
         return ohlc_df

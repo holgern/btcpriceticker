@@ -16,16 +16,18 @@ class CoinGecko(Service):
         fiat,
         whichcoin="bitcoin",
         days_ago=1,
-        enable_timeseries=True,
         enable_ohlc=True,
+        enable_timeseries=True,
+        enable_ohlcv=True,
     ):
         self.cg = CoinGeckoAPI()
         self.whichcoin = whichcoin
         self.initialize(
             fiat,
             days_ago=days_ago,
-            enable_timeseries=enable_timeseries,
             enable_ohlc=enable_ohlc,
+            enable_timeseries=enable_timeseries,
+            enable_ohlcv=enable_ohlcv,
         )
         self.name = "coingecko"
 
@@ -92,8 +94,8 @@ class CoinGecko(Service):
             dt = datetime.fromtimestamp(float(price[0]) / 1000, tz=timezone.utc)
             self.price_history.add_price(dt, float(price[1]))
 
-    def get_ohlc(self, currency) -> pd.DataFrame:
-        """Fetch OHLC data based on the number of days ago."""
+    def get_ohlcv(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        """Fetch OHLCV data based on the number of days ago."""
         normalized_currency = currency.lower()
         time_ranges = [1, 7, 14, 30, 90, 180, 365]
         duration = next((d for d in time_ranges if self.days_ago <= d), "max")
@@ -104,7 +106,7 @@ class CoinGecko(Service):
         timeseries = [
             {
                 "time": datetime.fromtimestamp(ohlc[0] / 1000, tz=timezone.utc),
-                "ohlc": ohlc[1:],
+                "ohlcv": ohlc[1:] + [0],
             }
             for ohlc in raw_ohlc
             if (
@@ -115,9 +117,19 @@ class CoinGecko(Service):
         ]
 
         df = pd.DataFrame(
-            [ohlc["ohlc"] for ohlc in timeseries],
-            columns=["Open", "High", "Low", "Close"],
+            [ohlcv["ohlcv"] for ohlcv in timeseries],
+            columns=["Open", "High", "Low", "Close", "Volume"],
         )
-        df.index = [ohlc["time"] for ohlc in timeseries]
+        df.index = [ohlcv["time"] for ohlcv in timeseries]
+
+        if existing_timestamp:
+            cutoff = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
+            df = df[df.index > cutoff]
 
         return df
+
+    def get_ohlc(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        """Fetch OHLC data based on the number of days ago."""
+        ohlcv_df = self.get_ohlcv(currency, existing_timestamp)
+        ohlc_df = ohlcv_df.drop(columns=["Volume"])
+        return ohlc_df

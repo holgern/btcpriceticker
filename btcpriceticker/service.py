@@ -1,6 +1,6 @@
 import abc
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import pandas as pd
 
@@ -19,14 +19,22 @@ class Service(metaclass=abc.ABCMeta):
         days_ago=1,
         enable_ohlc=False,
         enable_timeseries=False,
+        enable_ohlcv=False,
     ):
         self.interval = interval
         self.days_ago = days_ago
         self.name = ""
         self.fiat = fiat
         self.enable_ohlc = enable_ohlc
+        self.enable_ohlcv = enable_ohlcv
         self.enable_timeseries = enable_timeseries
-        self.ohlc = {}
+        self.ohlc: Union[pd.DataFrame, Any] = pd.DataFrame(
+            columns=["Open", "High", "Low", "Close"]
+        )
+
+        self.ohlcv: Union[pd.DataFrame, Any] = pd.DataFrame(
+            columns=["Open", "High", "Low", "Close", "Volume"]
+        )
         self.price = {
             "usd": 0.0,
             "sat_usd": 0.0,
@@ -71,8 +79,10 @@ class Service(metaclass=abc.ABCMeta):
             self.update_price_history(self.fiat)
         else:
             self.append_current_price(self.price["fiat"])
+        if self.enable_ohlcv:
+            self.update_ohlcv(self.fiat)
         if self.enable_ohlc:
-            self.ohlc = self.get_ohlc(self.fiat)
+            self.update_ohlc(self.fiat)
 
         self.price["timestamp"] = current_time
 
@@ -89,6 +99,47 @@ class Service(metaclass=abc.ABCMeta):
             return ""
         return f"{change_percentage:+.2f}%"
 
+    def _get_ohlcv_timestamp_list(self) -> list[float]:
+        if isinstance(self.ohlcv, pd.DataFrame) and not self.ohlcv.empty:
+            if isinstance(self.ohlcv.index, pd.DatetimeIndex):
+                timestamps = self.ohlcv.index.astype("int64") / 1e9
+                return timestamps.tolist()
+        return []
+
+    def update_ohlcv(self, currency: str) -> None:
+        existing_timestamp = self._get_ohlcv_timestamp_list()
+        ohlcv_data = self.get_ohlcv(currency, existing_timestamp=existing_timestamp)
+
+        if isinstance(ohlcv_data, pd.DataFrame):
+            if ohlcv_data.empty:
+                return
+            new_data = ohlcv_data.sort_index()
+            if isinstance(self.ohlcv, pd.DataFrame) and not self.ohlcv.empty:
+                combined = pd.concat([self.ohlcv, new_data])
+                combined = combined[~combined.index.duplicated(keep="last")]  # type: ignore[index]
+                self.ohlcv = combined.sort_index()
+            else:
+                self.ohlcv = new_data
+        else:
+            self.ohlcv = ohlcv_data
+
+    def update_ohlc(self, currency: str) -> None:
+        existing_timestamp = self._get_ohlcv_timestamp_list()
+        ohlc_data = self.get_ohlc(currency, existing_timestamp=existing_timestamp)
+
+        if isinstance(ohlc_data, pd.DataFrame):
+            if ohlc_data.empty:
+                return
+            new_data = ohlc_data.sort_index()
+            if isinstance(self.ohlc, pd.DataFrame) and not self.ohlc.empty:
+                combined = pd.concat([self.ohlc, new_data])
+                combined = combined[~combined.index.duplicated(keep="last")]  # type: ignore[index]
+                self.ohlc = combined.sort_index()
+            else:
+                self.ohlc = new_data
+        else:
+            self.ohlc = ohlc_data
+
     @abc.abstractmethod
     def get_current_price(self, currency) -> Optional[float]:
         pass
@@ -102,5 +153,9 @@ class Service(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_ohlc(self, currency) -> pd.DataFrame:
+    def get_ohlc(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        pass
+
+    @abc.abstractmethod
+    def get_ohlcv(self, currency, existing_timestamp=None) -> pd.DataFrame:
         pass

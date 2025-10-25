@@ -24,8 +24,9 @@ class CoinPaprika(Service):
         whichcoin="btc-bitcoin",
         days_ago=1,
         interval="1h",
-        enable_timeseries=True,
         enable_ohlc=False,
+        enable_timeseries=True,
+        enable_ohlcv=False,
     ):
         self.api_client: Optional[Any] = (
             Coinpaprika.Client() if COINPAPRIKA_MODULE else None
@@ -36,8 +37,9 @@ class CoinPaprika(Service):
             fiat,
             interval=interval,
             days_ago=days_ago,
-            enable_timeseries=enable_timeseries,
             enable_ohlc=enable_ohlc,
+            enable_timeseries=enable_timeseries,
+            enable_ohlcv=enable_ohlcv,
         )
         self.coins: Optional[list[dict[str, Any]]] = None
         self.name = "coinpaprika"
@@ -150,24 +152,32 @@ class CoinPaprika(Service):
             )
             self.price_history.add_price(dt, price["price"])
 
-    def get_ohlc(self, currency: str) -> pd.DataFrame:
+    def get_ohlcv(self, currency: str, existing_timestamp=None) -> pd.DataFrame:
         if self.api_client is None:
-            return {}
-        start_date = self.calculate_start_date("1h", existing_timestamp=None)
-        raw_ohlc = self.api_client.ohlcv(self.whichcoin, start=start_date)
+            return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+        start_date = self.calculate_start_date(
+            "1h", existing_timestamp=existing_timestamp
+        )
+        raw_ohlcv = self.api_client.ohlcv(self.whichcoin, start=start_date)
         timeseries = [
             {
                 "time": datetime.strptime(
-                    ohlc["time_open"], "%Y-%m-%dT%H:%M:%SZ"
+                    ohlcv["time_open"], "%Y-%m-%dT%H:%M:%SZ"
                 ).replace(tzinfo=timezone.utc),
-                "ohlc": [ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"]],
+                "ohlcv": [
+                    ohlcv["open"],
+                    ohlcv["high"],
+                    ohlcv["low"],
+                    ohlcv["close"],
+                    ohlcv["volume"],
+                ],
             }
-            for ohlc in raw_ohlc
+            for ohlcv in raw_ohlcv
             if (
                 datetime.strptime(
-                    raw_ohlc[-1]["time_open"], "%Y-%m-%dT%H:%M:%SZ"
+                    raw_ohlcv[-1]["time_open"], "%Y-%m-%dT%H:%M:%SZ"
                 ).replace(tzinfo=timezone.utc)
-                - datetime.strptime(ohlc["time_open"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                - datetime.strptime(ohlcv["time_open"], "%Y-%m-%dT%H:%M:%SZ").replace(
                     tzinfo=timezone.utc
                 )
             ).days
@@ -175,9 +185,19 @@ class CoinPaprika(Service):
         ]
 
         df = pd.DataFrame(
-            [ohlc["ohlc"] for ohlc in timeseries],
-            columns=["Open", "High", "Low", "Close"],
+            [ohlcv["ohlcv"] for ohlcv in timeseries],
+            columns=["Open", "High", "Low", "Close", "Volume"],
         )
         df.index = [ohlc["time"] for ohlc in timeseries]
 
+        if existing_timestamp:
+            cutoff = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
+            df = df[df.index > cutoff]
+
         return df
+
+    def get_ohlc(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        """Fetch OHLC data based on the number of days ago."""
+        ohlcv_df = self.get_ohlcv(currency, existing_timestamp)
+        ohlc_df = ohlcv_df.drop(columns=["Volume"])
+        return ohlc_df

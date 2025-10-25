@@ -24,8 +24,9 @@ class Kraken(Service):
         base_asset: str = "BTC",
         interval: str = "1h",
         days_ago: int = 1,
-        enable_timeseries: bool = True,
         enable_ohlc: bool = True,
+        enable_timeseries: bool = True,
+        enable_ohlcv: bool = True,
     ):
         self.base_asset = base_asset.upper()
         self.exchange: Optional[Any] = ccxt.kraken() if CCXT_MODULE else None  # type: ignore[attr-defined]
@@ -33,8 +34,9 @@ class Kraken(Service):
             fiat,
             interval=interval,
             days_ago=days_ago,
-            enable_timeseries=enable_timeseries,
             enable_ohlc=enable_ohlc,
+            enable_timeseries=enable_timeseries,
+            enable_ohlcv=enable_ohlcv,
         )
         self.name = "kraken"
 
@@ -106,23 +108,38 @@ class Kraken(Service):
             dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
             self.price_history.add_price(dt, float(close_price))
 
-    def get_ohlc(self, currency: str) -> pd.DataFrame:
+    def get_ohlcv(self, currency: str, existing_timestamp=None) -> pd.DataFrame:
         if self.exchange is None:
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
+            return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
         symbol = self._get_symbol(currency)
         try:
-            ohlcv_data = self.exchange.fetch_ohlcv(symbol, timeframe=self.interval)
+            since = self._calculate_since(existing_timestamp)
+            ohlcv_data = self.exchange.fetch_ohlcv(
+                symbol, timeframe=self.interval, since=since
+            )
         except Exception as exc:  # pragma: no cover - network or API errors
-            logger.exception(f"Failed to fetch OHLC data for {symbol}: {exc}")
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
+            logger.exception(f"Failed to fetch OHLCV data for {symbol}: {exc}")
+            return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
 
         if not ohlcv_data:
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
+            return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
 
         times = [
             datetime.fromtimestamp(candle[0] / 1000, tz=timezone.utc)
             for candle in ohlcv_data
         ]
-        values = [candle[1:5] for candle in ohlcv_data]
-        df = pd.DataFrame(values, columns=["Open", "High", "Low", "Close"], index=times)
+        values = [candle[1:6] for candle in ohlcv_data]
+        df = pd.DataFrame(
+            values, columns=["Open", "High", "Low", "Close", "Volume"], index=times
+        )
+
+        if existing_timestamp:
+            cutoff = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
+            df = df[df.index > cutoff]
         return df
+
+    def get_ohlc(self, currency, existing_timestamp=None) -> pd.DataFrame:
+        """Fetch OHLC data based on the number of days ago."""
+        ohlcv_df = self.get_ohlcv(currency, existing_timestamp)
+        ohlc_df = ohlcv_df.drop(columns=["Volume"])
+        return ohlc_df
