@@ -5,9 +5,10 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -184,6 +185,24 @@ class Bit2Me(Service):
             self._fiat_rates = rates
             self._fiat_rates_timestamp = time.time()
 
+    def _extract_rate(self, payload: Any, currency: str) -> float | None:
+        if not isinstance(payload, list):
+            return None
+        for entry in payload:
+            if not isinstance(entry, dict):
+                continue
+            fiat_section = entry.get("fiat")
+            if not isinstance(fiat_section, dict):
+                continue
+            raw_rate = fiat_section.get(currency.upper())
+            if raw_rate is None:
+                continue
+            try:
+                return float(raw_rate)
+            except (TypeError, ValueError):
+                continue
+        return None
+
     def _get_fiat_rate(self, currency: str) -> float | None:
         code = currency.upper()
         if code == "USD":
@@ -200,6 +219,55 @@ class Bit2Me(Service):
         # Attempt one more refresh in case rates were missing
         self._refresh_rates()
         return self._fiat_rates.get(code)
+
+    def _fetch_ohlc_point(
+        self, timeframe: str, currency: str, target_dt: datetime
+    ) -> tuple[datetime, dict[str, float]] | None:
+        iso_time = target_dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        rate_time = str(int(target_dt.timestamp() * 1000))
+        try:
+            usd_values = self._request(
+                "GET",
+                f"/v1/currency/ohlca/{self.base_asset}",
+                params={"timeframe": timeframe, "time": iso_time},
+            )
+        except RuntimeError:
+            return None
+
+        if not isinstance(usd_values, dict):
+            return None
+
+        try:
+            rate_payload = self._request(
+                "GET",
+                "/v1/currency/rate",
+                params={"type": "fiat", "time": rate_time},
+            )
+        except RuntimeError:
+            return None
+
+        rate_value = self._extract_rate(rate_payload, currency)
+        if rate_value is None:
+            logger.warning("Bit2Me ohlc rate missing for %s", currency)
+            return None
+
+        try:
+            open_price = float(usd_values["open"]) * rate_value
+            high_price = float(usd_values["high"]) * rate_value
+            low_price = float(usd_values["low"]) * rate_value
+            close_price = float(usd_values["close"]) * rate_value
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        return (
+            target_dt,
+            {
+                "Open": open_price,
+                "High": high_price,
+                "Low": low_price,
+                "Close": close_price,
+            },
+        )
 
     def get_current_price(self, currency: str) -> float | None:
         usd_price = self._get_usd_price()
@@ -282,77 +350,42 @@ class Bit2Me(Service):
             interval_seconds = 3600
 
         now_dt = datetime.now(timezone.utc)
+        now_ts = int(now_dt.timestamp())
+        now_ts -= now_ts % interval_seconds
+        now_dt = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+
+        rows: list[tuple[datetime, dict[str, float]]] = []
+        seen = {int(ts) for ts in (existing_timestamp or [])}
+
         if existing_timestamp:
-            last_dt = datetime.fromtimestamp(existing_timestamp[-1], tz=timezone.utc)
-            target_dt = last_dt + timedelta(seconds=interval_seconds or 0)
-            if target_dt > now_dt:
-                target_dt = now_dt
+            last_ts = int(existing_timestamp[-1])
+            start_ts = last_ts + interval_seconds
         else:
-            target_dt = now_dt
+            window_seconds = max(self.days_ago * 86400, interval_seconds)
+            periods = max(1, math.ceil(window_seconds / interval_seconds))
+            start_ts = now_ts - (periods - 1) * interval_seconds
 
-        # Use ISO format compatible with Bit2Me rate endpoint (milliseconds + Z)
-        iso_time = target_dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        rate_time = str(int(target_dt.timestamp() * 1000))
+        current_ts = start_ts
+        while current_ts <= now_ts:
+            if current_ts in seen:
+                current_ts += interval_seconds
+                continue
+            target_dt = datetime.fromtimestamp(current_ts, tz=timezone.utc)
+            point = self._fetch_ohlc_point(timeframe, currency, target_dt)
+            if point is not None:
+                ts, values = point
+                int_ts = int(ts.timestamp())
+                if int_ts not in seen:
+                    rows.append((ts, values))
+                    seen.add(int_ts)
+            current_ts += interval_seconds
 
-        try:
-            usd_values = self._request(
-                "GET",
-                f"/v1/currency/ohlca/{self.base_asset}",
-                params={"timeframe": timeframe, "time": iso_time},
-            )
-        except RuntimeError:
+        if not rows:
             return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
 
-        if not isinstance(usd_values, dict):
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
-
-        try:
-            rate_payload = self._request(
-                "GET",
-                "/v1/currency/rate",
-                params={"type": "fiat", "time": rate_time},
-            )
-        except RuntimeError:
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
-
-        rate_value: float | None = None
-        if isinstance(rate_payload, list):
-            for entry in rate_payload:
-                if not isinstance(entry, dict):
-                    continue
-                fiat_section = entry.get("fiat")
-                if not isinstance(fiat_section, dict):
-                    continue
-                raw_rate = fiat_section.get(currency.upper())
-                if raw_rate is None:
-                    continue
-                try:
-                    rate_value = float(raw_rate)
-                    break
-                except (TypeError, ValueError):
-                    continue
-        if rate_value is None:
-            logger.warning("Bit2Me ohlc rate missing for %s", currency)
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
-
-        try:
-            open_price = float(usd_values["open"]) * rate_value
-            high_price = float(usd_values["high"]) * rate_value
-            low_price = float(usd_values["low"]) * rate_value
-            close_price = float(usd_values["close"]) * rate_value
-        except (TypeError, ValueError, KeyError):
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
-
-        df = pd.DataFrame(
-            [
-                {
-                    "Open": open_price,
-                    "High": high_price,
-                    "Low": low_price,
-                    "Close": close_price,
-                }
-            ],
-            index=[target_dt],
-        )
+        rows.sort(key=lambda item: item[0])
+        index = [ts for ts, _ in rows]
+        data = [values for _, values in rows]
+        df = pd.DataFrame(data, index=index)
         df.index.name = "timestamp"
         return df

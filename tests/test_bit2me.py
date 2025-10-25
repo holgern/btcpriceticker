@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pandas as pd
@@ -44,8 +45,9 @@ class TestBit2Me(unittest.TestCase):
         assert prices[0] == approx(16000.0)
         assert prices[1] == approx(16400.0)
 
-    def test_get_ohlc_fetches_and_converts(self):
+    def test_fetch_ohlc_point_converts_prices(self):
         service = Bit2Me("EUR")
+        target_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
         with patch.object(
             Bit2Me,
             "_request",
@@ -54,27 +56,60 @@ class TestBit2Me(unittest.TestCase):
                 [{"fiat": {"EUR": "0.9"}}],
             ],
         ):
+            result = service._fetch_ohlc_point("1H", "EUR", target_dt)
+
+        self.assertIsNotNone(result)
+        assert result is not None  # for type checkers
+        ts, data = result
+        self.assertEqual(ts, target_dt)
+        assert data["Open"] == approx(90.0)
+        assert data["High"] == approx(99.0)
+        assert data["Low"] == approx(81.0)
+        assert data["Close"] == approx(94.5)
+
+    def test_get_ohlc_returns_multiple_rows(self):
+        service = Bit2Me("EUR", interval="12h")
+        service.days_ago = 1
+
+        with patch.object(Bit2Me, "_fetch_ohlc_point", autospec=True) as mock_fetch:
+
+            def fake_fetch(self, timeframe, currency, target_dt):
+                base = target_dt.timestamp()
+                return (
+                    target_dt,
+                    {
+                        "Open": base,
+                        "High": base + 1,
+                        "Low": base - 1,
+                        "Close": base + 0.5,
+                    },
+                )
+
+            mock_fetch.side_effect = fake_fetch
             df = service.get_ohlc("EUR")
 
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
         self.assertListEqual(list(df.columns), ["Open", "High", "Low", "Close"])
-        row = df.iloc[0]
-        assert row["Open"] == approx(90.0)
-        assert row["High"] == approx(99.0)
-        assert row["Low"] == approx(81.0)
-        assert row["Close"] == approx(94.5)
+        self.assertEqual(len(df), 2)
 
     def test_get_ohlcv_adds_volume(self):
         service = Bit2Me("EUR")
-        with patch.object(
-            Bit2Me,
-            "_request",
-            side_effect=[
-                {"open": "100.0", "high": "110.0", "low": "90.0", "close": "105.0"},
-                [{"fiat": {"EUR": "0.9"}}],
-            ],
-        ):
+
+        with patch.object(Bit2Me, "_fetch_ohlc_point", autospec=True) as mock_fetch:
+
+            def fake_fetch(self, timeframe, currency, target_dt):
+                return (
+                    target_dt,
+                    {
+                        "Open": 100.0,
+                        "High": 110.0,
+                        "Low": 90.0,
+                        "Close": 105.0,
+                    },
+                )
+
+            mock_fetch.side_effect = fake_fetch
             df = service.get_ohlcv("EUR")
 
         self.assertIsInstance(df, pd.DataFrame)
