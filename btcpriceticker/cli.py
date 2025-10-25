@@ -19,8 +19,10 @@ class State(TypedDict):
 state: State = {"verbose": 3, "service": "mempool"}
 
 
-@app.command()
-def price(symbol: str):
+@app.command(help="Show the latest BTC price converted into the given fiat symbol.")
+def price(
+    symbol: str = typer.Argument(..., help="Fiat currency code, e.g. 'EUR'."),
+):
     p = Price(
         service=state["service"],
         fiat=symbol,
@@ -33,8 +35,14 @@ def price(symbol: str):
     print(price)
 
 
-@app.command()
-def history(symbol: str, interval: str, days_ago: int = 1):
+@app.command(help="Display historical BTC prices for the requested interval.")
+def history(
+    symbol: str = typer.Argument(..., help="Fiat currency code, e.g. 'EUR'."),
+    interval: str = typer.Argument(..., help="Sampling interval, e.g. '1h'."),
+    days_ago: int = typer.Option(
+        1, help="Number of days of data to pull counting back from now."
+    ),
+):
     p = Price(
         service=state["service"],
         days_ago=days_ago,
@@ -48,8 +56,14 @@ def history(symbol: str, interval: str, days_ago: int = 1):
     print(p.timeseries.data)
 
 
-@app.command()
-def ohlc(symbol: str, interval: str, days_ago: int = 1):
+@app.command(help="Retrieve OHLC candles converted into the requested fiat.")
+def ohlc(
+    symbol: str = typer.Argument(..., help="Fiat currency code, e.g. 'EUR'."),
+    interval: str = typer.Argument(..., help="Candle interval, e.g. '12h'."),
+    days_ago: int = typer.Option(
+        1, help="Number of past days to cover when fetching candles."
+    ),
+):
     p = Price(
         service=state["service"],
         days_ago=days_ago,
@@ -63,8 +77,14 @@ def ohlc(symbol: str, interval: str, days_ago: int = 1):
     print(p.ohlc)
 
 
-@app.command()
-def ohlcv(symbol: str, interval: str, days_ago: int = 1):
+@app.command(help="Retrieve OHLCV candles (with synthetic volume) for BTC.")
+def ohlcv(
+    symbol: str = typer.Argument(..., help="Fiat currency code, e.g. 'EUR'."),
+    interval: str = typer.Argument(..., help="Candle interval, e.g. '1h'."),
+    days_ago: int = typer.Option(
+        1, help="Number of past days to cover when fetching candles."
+    ),
+):
     p = Price(
         service=state["service"],
         days_ago=days_ago,
@@ -80,10 +100,16 @@ def ohlcv(symbol: str, interval: str, days_ago: int = 1):
 
 @app.callback()
 def main(
-    verbose: int = 3,
-    service: str = "mempool",
+    verbose: int = typer.Option(
+        3,
+        help="Verbosity level: 0=critical, 1=error, 2=warn, 3=info, 4=debug.",
+    ),
+    service: str = typer.Option(
+        "mempool",
+        help="Service backend to use, e.g. 'bit2me', 'binance', or 'mempool'.",
+    ),
 ):
-    """Python CLI for mempool.space, enjoy."""
+    """BTC price utilities for multiple exchange backends."""
     # Logging
     state["verbose"] = verbose
     state["service"] = service
